@@ -6,16 +6,15 @@ import {AiFillFilePdf, AiFillGithub, AiFillLinkedin} from "react-icons/ai"
 function Header () {
 
     return (
-        <BrowserRouter>
-            <div >
+        <div>
+            <BrowserRouter>
                 <header className="page--header">
                     <Link className="page--link" smooth to="About" >Bio</Link>
                     <Link className = "page--link" smooth to="Experience">Experience</Link>
                     <Link className="page--link" smooth to="Projects">Projects</Link>
                     <Link className="page--link" smooth to="Contact">Contact</Link>
-
                 </header>
-            </div>
+            </BrowserRouter>
             <div className="header--wrapper">
                 <div className="header--body">
                     <div className="title">
@@ -23,7 +22,7 @@ function Header () {
                         <hr></hr>
                         </h1>
                     </div>
-                    <p className="description"><em>Computer Science Student @ UVA passionate about software development & ML</em></p>
+                    <p className="description"><em>Computer Science Student @ UVA passionate about software development & machine learning</em></p>
                 </div>
                 <div className="social--links">
                     <div className="icon--wrapper">
@@ -45,16 +44,12 @@ function Header () {
                         <a target="_blank" href="https://www.linkedin.com/in/kingsleykim/">
                             <div className="icon">
                                 <AiFillLinkedin size='40px'/> 
-                            </div>
-                            
+                            </div>  
                         </a>
-                    </div>
-                    
-                    
+                    </div>  
                 </div>
             </div>
-            
-        </BrowserRouter>
+        </div>
         
     )
 }

@@ -1,4 +1,4 @@
-import logo from './logo.svg';
+
 import './App.css';
 import Header from "./components/Header";
 import About from "./components/About.js";
@@ -10,9 +10,11 @@ function App() {
     <div className="App">
         <Header />
         <About />
-        <Contact />
         <Experience />
         <Projects />
+        <Contact />
+        
+        
     </div>
   );
 }
