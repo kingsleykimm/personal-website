@@ -193,7 +193,10 @@ transition: transform .2s;
 
 }
 .contact--div:hover {
-  opacity: 1;
+  position: relative;
+  margin-top: -15px;
+  transition: margin-top .1s;
+  -webkit-transition: margin-top .1s;
 }
 
 .contact--divs {

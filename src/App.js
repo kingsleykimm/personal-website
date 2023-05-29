@@ -14,7 +14,9 @@ function App() {
         <Projects />
         <Contact />
         
-        
+        <footer style = {{marginBottom: '40px', color: '#5d5e60', fontSize: '16px'}}>
+          © 2023 Kingsley Kim
+        </footer>
     </div>
   );
 }

@@ -18,7 +18,7 @@ function Experience () {
         {
             icon: researchIcon,
             date: "May 2023 - Dec 2023",
-            title: '\"AI For Science\" Research Intern',
+            title: '"AI For Science" Research Intern',
             subtitle: 'University of Virginia',
             desc: 'AI, Python, Machine Learning, using machine learning to solve applicable, real-world problems and examining datasets like economic time-series or rainfall'
         },
