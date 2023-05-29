@@ -9,6 +9,11 @@
   to {width: 100%}
 }
 
+@keyframes fadein {
+  from {opacity: 0}
+  to {opacity: 1}
+}
+
 @keyframes blinking {
   0% {border-right-color: transparent}
   50% {border-right-color: #5d5e60}
@@ -108,19 +113,33 @@
 }
 .icon--wrapper {
   background: #A57548;
-  width: 60px;
-  height: 60px;
+  width: 80px;
+  height: 80px;
 transition: transform .2s;
   border-radius: 50%;
   margin-bottom: 50px;
   display: flex;
   justify-content: center;
   align-items: center;
+
+ 
 }
 .icon {
   color: white;
-  margin: auto;
-  
+  margin: auto; 
+}
+.resume--icon {
+  animation: fadein 1s 3s forwards;
+  opacity: 0;
+}
+
+.github--icon {
+  animation: fadein 1s 4s forwards;
+  opacity: 0;
+}
+.linkedin--icon {
+  animation: fadein 1s 5s forwards;
+  opacity: 0;
 }
 
 .icon--wrapper:hover {
@@ -136,7 +155,9 @@ transition: transform .2s;
   color: #5d5e60;
 
   margin-bottom: 60px;
+
 }
+
 .about--description {
   font-size: 28px;
   text-align: start;
@@ -147,3 +168,38 @@ transition: transform .2s;
   font-size: 44px;
 }
 
+#contact {
+  margin-bottom: 300px;
+}
+.contact--header {
+  margin-bottom: 80px;
+  font-size: 44px;
+  color: #5d5e60
+}
+
+.contact--div {
+  display: flex;
+  color: white;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  background: #A57548;
+  width: 24%;
+  border-radius: 10%;
+  font-size: 24px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+  text-decoration: none;
+
+}
+.contact--div:hover {
+  opacity: 1;
+}
+
+.contact--divs {
+  margin: 0 auto;
+  display: flex;
+  width: 60%;
+  justify-content: space-evenly;
+  gap: 60px;
+}

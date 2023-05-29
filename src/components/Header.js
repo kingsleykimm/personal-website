@@ -25,25 +25,25 @@ function Header () {
                     <p className="description"><em>Computer Science Student @ UVA passionate about software development & machine learning</em></p>
                 </div>
                 <div className="social--links">
-                    <div className="icon--wrapper">
+                    <div className="icon--wrapper resume--icon">
                         <a target="_blank" href="https://drive.google.com/file/d/17Okl_7gg8e3_tMoFIsyFxeONLK1v_IHF/view?usp=sharing">
                             <div className="icon">
-                                <AiFillFilePdf size='40px'/> 
+                                <AiFillFilePdf size='50px'/> 
                             </div>
                         </a>
                     </div>
-                    <div className="icon--wrapper">
+                    <div className="icon--wrapper github--icon">
                         <a target="_blank" href="https://github.com/kingsleykimm/">
                             <div className="icon">
-                                <AiFillGithub size='40px'/> 
+                                <AiFillGithub size='50px'/> 
                             </div>
                             
                         </a>
                     </div>
-                    <div className="icon--wrapper">
+                    <div className="icon--wrapper linkedin--icon">
                         <a target="_blank" href="https://www.linkedin.com/in/kingsleykim/">
                             <div className="icon">
-                                <AiFillLinkedin size='40px'/> 
+                                <AiFillLinkedin size='50px'/> 
                             </div>  
                         </a>
                     </div>  

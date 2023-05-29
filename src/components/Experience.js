@@ -20,20 +20,25 @@ function Experience () {
             date: "May 2023 - Dec 2023",
             title: '\"AI For Science\" Research Intern',
             subtitle: 'University of Virginia',
-            desc: 'AI, Python, Machine Learning'
+            desc: 'AI, Python, Machine Learning, using machine learning to solve applicable, real-world problems and examining datasets like economic time-series or rainfall'
         },
         {
             icon: schoolIcon,
             date: "Aug 2022 - present",
             title: "University of Virginia",
-            subtitle: "Charlotesville, VA"
+            subtitle: "Charlotesville, VA",
+            desc: "BS in CS + BA in Math"
         },
         {
             icon: researchIcon,
             date: "Jan 2020 - May 2022",
             title: 'Plavchan Group Research Assistant',
             subtitle: 'George Mason University, Fairfax, VA',
-            desc: 'Research, Python, Data Analysis, Signal Processing'
+            // desc: 'Worked , and used Python to process the images and signals, also used the software AstroImageJ.'
+            desc: <ul>
+                <li>Worked with the Plavchan research group in analyzing astronomical images to find possible exoplanet candidates, had my own research publication as well</li>
+                <li>Used Python for signal processing and noise reduction in images</li>
+            </ul>
         },
         {
             icon: schoolIcon,
@@ -49,9 +54,7 @@ function Experience () {
             <h1 className="experience--header">
                 Experience & Education
             </h1>
-            <h2 className="experience-header">
-                The places I've worked and studied at
-            </h2>
+
             <VerticalTimeline>
                 {timeline.map((t, i) => {
                 const contentStyle = i === 0 ? { background: 'rgb(33, 150, 243)', color: '#fff' } : undefined;
