@@ -4,6 +4,7 @@ import 'react-vertical-timeline-component/style.min.css';
 import {MdSchool, MdAnalytics} from "react-icons/md"
 import React from "react";
 
+
 // Timeline code was cited from https://www.cluemediator.com/how-to-create-a-vertical-timeline-component-in-react
 function Experience () {
     const researchIcon = {
@@ -63,8 +64,8 @@ function Experience () {
                 return <VerticalTimelineElement
                     key={i}
                     className="vertical-timeline-element--work"
-                    contentStyle={contentStyle}
-                    contentArrowStyle={arrowStyle}
+                    // contentStyle={contentStyle}
+                    // contentArrowStyle={arrowStyle}
                     date={t.date}
                     {...t.icon}
                 >
@@ -76,6 +77,11 @@ function Experience () {
                 </VerticalTimelineElement>
                 })}
             </VerticalTimeline>
+            <p>
+                <em>Made with <a href="https://github.com/stephane-monnot/react-vertical-timeline" target="_blank">
+                    Vertical Timeline React </a>
+                </em>
+            </p>
         </div>
     )
 }
