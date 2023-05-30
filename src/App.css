@@ -75,7 +75,7 @@
   overflow: hidden;
   white-space: nowrap;
   width: 0;
-  animation: typing 3s steps(55, end) forwards, blinking 1s infinite;
+  animation: typing 2.5s steps(55, end) forwards, blinking 1s infinite;
   border-right: 2px solid;
 
 
@@ -129,16 +129,16 @@ transition: transform .2s;
   margin: auto; 
 }
 .resume--icon {
-  animation: fadein 1s 3s forwards;
+  animation: fadein 0.75s 2.5s forwards;
   opacity: 0;
 }
 
 .github--icon {
-  animation: fadein 1s 4s forwards;
+  animation: fadein 0.75s 3.25s forwards;
   opacity: 0;
 }
 .linkedin--icon {
-  animation: fadein 1s 5s forwards;
+  animation: fadein 0.75s 4s forwards;
   opacity: 0;
 }
 
@@ -172,7 +172,7 @@ transition: transform .2s;
   margin-bottom: 300px;
 }
 .contact--header {
-  margin-bottom: 80px;
+  margin-bottom: 120px;
   font-size: 44px;
   color: #5d5e60
 }

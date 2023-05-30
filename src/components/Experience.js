@@ -3,7 +3,7 @@ import { VerticalTimeline, VerticalTimelineElement } from "react-vertical-timeli
 import 'react-vertical-timeline-component/style.min.css';
 import {MdSchool, MdAnalytics} from "react-icons/md"
 import React from "react";
-
+import {Fade} from "react-awesome-reveal"
 
 // Timeline code was cited from https://www.cluemediator.com/how-to-create-a-vertical-timeline-component-in-react
 function Experience () {
@@ -52,10 +52,11 @@ function Experience () {
     ]
     return (
         <div id="experience">
-            <h1 className="experience--header">
-                Experience & Education
-            </h1>
-
+            <Fade direction='"up"' duration="1500">
+                <h1 className="experience--header">
+                    Experience & Education
+                </h1>
+            </Fade>
             <VerticalTimeline>
                 {timeline.map((t, i) => {
                 const contentStyle = i === 0 ? { background: 'rgb(33, 150, 243)', color: '#fff' } : undefined;
