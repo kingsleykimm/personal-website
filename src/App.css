@@ -225,7 +225,7 @@ transition: transform .2s;
   justify-content: space-between;
   align-items: center;
   max-width: 40%;
-  padding: 30px;
+  padding: 20px;
   border-radius: 30px;
   transition: transform 0.2s;
 }
@@ -236,23 +236,32 @@ transition: transform .2s;
 .card--container > img {
   height: auto;
   max-width: 100%;
+  margin-bottom: 10px;
 }
-.card--description-container {
+.card-description-container {
 
-  border:  solid #5d5e60 10px;
+  /* border:  solid #5d5e60 3px; */
+  border-radius: 7.5px;
+  padding: 0 5px;
 
 }
 
 .card--description {
   font-size: 1.25em;
   color:#5d5e60;
+  line-height: 1.25em;
+
 }
 
 .card--links {
   background: #5d5e60;
   padding: 10px;
   border-radius: 5px;
+  transition: transform 0.2s;
 
+}
+.card--links:hover {
+  transform: scale(1.10);
 }
 .card-link {
   text-decoration: none;
@@ -260,4 +269,23 @@ transition: transform .2s;
   color: #EDEBD7;
   font-weight: 600;
   font-size: 20px;
+}
+
+.card--skills {
+  background: #D62828;
+  color: #EDEBD7;
+  padding: 10px;
+  font-weight: 500;
+  border-radius: 5px;
+  transition: transform 0.2s;
+}
+.card--skills:hover {
+  transform: scale(1.10);
+}
+
+.card-skills-container {
+  display : flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
 }

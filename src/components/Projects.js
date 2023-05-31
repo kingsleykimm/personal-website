@@ -26,6 +26,7 @@ function Projects () {
                 data.map((item, index) => {
 
                     return <ProjectCard 
+                        title = {item.title}
                         image = {item.image}
                         desc = {item.desc}
                         siteLink = {item.siteLink}
