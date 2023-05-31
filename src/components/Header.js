@@ -1,20 +1,10 @@
-
-import {BrowserRouter} from "react-router-dom";
-import {HashLink as Link } from "react-router-hash-link";
 import {AiFillFilePdf, AiFillGithub, AiFillLinkedin} from "react-icons/ai"
 
 function Header () {
 
     return (
         <div>
-            <BrowserRouter>
-                <header className="page--header">
-                    <Link className="page--link" smooth to="About" >Bio</Link>
-                    <Link className = "page--link" smooth to="Experience">Experience</Link>
-                    <Link className="page--link" smooth to="Projects">Projects</Link>
-                    <Link className="page--link" smooth to="Contact">Contact</Link>
-                </header>
-            </BrowserRouter>
+            
             <div className="header--wrapper">
                 <div className="header--body">
                     <div className="title">
