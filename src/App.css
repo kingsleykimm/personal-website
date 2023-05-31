@@ -192,18 +192,15 @@ transition: transform .2s;
   gap: 7px;
   background: #A57548;
   width: 24%;
-  border-radius: 10%;
+  border-radius: 20px;
   font-size: 24px;
   font-family: 'Inter', sans-serif;
   font-weight: 500;
   text-decoration: none;
-
+  transition: transform 0.2s;
 }
 .contact--div:hover {
-  position: relative;
-  margin-top: -15px;
-  transition: margin-top .1s;
-  -webkit-transition: margin-top .1s;
+  transform: scale(1.10);
 }
 
 .contact--divs {
@@ -212,4 +209,55 @@ transition: transform .2s;
   width: 60%;
   justify-content: space-evenly;
   gap: 60px;
+}
+.cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  margin: 40px 0;
+}
+
+.card--container {
+  background-color: white;
+  margin-bottom: 30px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 40%;
+  padding: 30px;
+  border-radius: 30px;
+  transition: transform 0.2s;
+}
+.card--container:hover {
+  transform: scale(1.05);
+}
+
+.card--container > img {
+  height: auto;
+  max-width: 100%;
+}
+.card--description-container {
+
+  border:  solid #5d5e60 10px;
+
+}
+
+.card--description {
+  font-size: 1.25em;
+  color:#5d5e60;
+}
+
+.card--links {
+  background: #5d5e60;
+  padding: 10px;
+  border-radius: 5px;
+
+}
+.card-link {
+  text-decoration: none;
+  
+  color: #EDEBD7;
+  font-weight: 600;
+  font-size: 20px;
 }

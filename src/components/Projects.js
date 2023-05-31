@@ -19,6 +19,9 @@ function Projects () {
                     <em>Some stuff I've worked/been working on</em>
                 </p>
             </Fade>
+
+            <Fade>
+            <div className="cards">
             {
                 data.map((item, index) => {
 
@@ -27,9 +30,12 @@ function Projects () {
                         desc = {item.desc}
                         siteLink = {item.siteLink}
                         gitLink = {item.gitLink}
+                        skills = {item.skills}
                     />
                 })
             }
+            </div>
+            </Fade>
 
         </div>
     )
