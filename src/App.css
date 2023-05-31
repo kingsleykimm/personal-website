@@ -45,8 +45,8 @@
 
 }
 
-#about, #experience {
-  padding: 0 100px;
+#about, #experience, #projects {
+  padding: 0 5%;
   font-family: 'Inter', sans-serif;
   margin-bottom: 200px;
   
@@ -146,16 +146,23 @@ transition: transform .2s;
   transform: scale(1.5);
 }
 #about {
-  padding-right: 400px;
+  padding-right: 30%;
 }
 
-.about--title, .experience--header {
+.about--title, .experience--header, .project--header {
   font-size: 44px;
   text-align: start;
   color: #5d5e60;
 
   margin-bottom: 60px;
 
+}
+.project--header {
+  margin-bottom: 20px;
+}
+.project--subheader {
+  color: #5d5e60;
+  text-align: start;
 }
 
 .about--description {
