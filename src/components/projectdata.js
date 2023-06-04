@@ -1,6 +1,13 @@
 
 const projectdata = [
     {
+        title: "Hoober",
+        image: "https://i.ibb.co/312ywyK/Screenshot-2023-06-04-at-15-27-41-React-App.png",
+        desc: "Web app built for UVA students looking to carpool to UVA events or to their hometowns",
+        gitLink: "https://github.com/kingsleykimm/hoober",
+        skills: ["React", "Express", "PassportJS", "SQL", "REST API"],
+    },
+    {
         title: "QNN Tetris Classifier",
         image: "https://user-images.githubusercontent.com/107822939/190576919-d8893521-9577-47f9-8797-06d4d570b1a5.png",
         desc: "Research project done in my senior year of high school, we used quantum neural networks to classify different shapes of Tetris blocks.",
