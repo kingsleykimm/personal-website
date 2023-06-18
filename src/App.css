@@ -219,7 +219,7 @@ transition: transform .2s;
 
 .card--container {
   background-color: white;
-  margin-bottom: 30px;
+  margin-bottom: 120px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -254,23 +254,28 @@ transition: transform .2s;
 }
 
 .card--links {
+  
+  
+  
+  display: flex;
+  gap: 20px;
+
+}
+
+.card-link {
+  text-decoration: none;
   background: #5d5e60;
   padding: 10px;
   border-radius: 5px;
-  transition: transform 0.2s;
-
-}
-.card--links:hover {
-  transform: scale(1.10);
-}
-.card-link {
-  text-decoration: none;
-  margin-right: 10px;
+  /* margin-right: 10px; */
   color: #EDEBD7;
   font-weight: 600;
   font-size: 20px;
+  transition: transform 0.2s;
 }
-
+.card-link:hover {
+  transform: scale(1.10);
+}
 .card--skills {
   background: #D62828;
   color: #EDEBD7;
