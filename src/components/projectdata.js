@@ -5,7 +5,8 @@ const projectdata = [
         image: "https://i.ibb.co/312ywyK/Screenshot-2023-06-04-at-15-27-41-React-App.png",
         desc: "Web app built for UVA students looking to carpool to UVA events or to their hometowns",
         gitLink: "https://github.com/kingsleykimm/hoober",
-        skills: ["React", "Express", "PassportJS", "SQL", "REST API"],
+        siteLink: "https://main--wondrous-kleicha-8a446b.netlify.app/",
+        skills: ["React", "Express", "SQL", "REST API", "RadixUI"],
     },
     {
         title: "QNN Tetris Classifier",
