@@ -265,7 +265,7 @@ transition: transform .2s;
 }
 .card-link {
   text-decoration: none;
-  
+  margin-right: 10px;
   color: #EDEBD7;
   font-weight: 600;
   font-size: 20px;
