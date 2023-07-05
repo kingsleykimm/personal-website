@@ -1,6 +1,13 @@
 
 const projectdata = [
     {
+        title: "Time Series",
+        image: "https://github.com/UVA-MLSys/Interpretable-Timeseries/blob/main/docs/images/coronavirus.jpg?raw=true",
+        desc: "Website we built for the time series research project we did in my internship",
+        gitLink: "https://github.com/UVA-MLSys/Interpretable-Timeseries",
+        siteLink: "https://uva-mlsys.github.io/Interpretable-Timeseries/pages/introduction.html"
+    },
+    {
         title: "Hoober",
         image: "https://i.ibb.co/312ywyK/Screenshot-2023-06-04-at-15-27-41-React-App.png",
         desc: "Web app built for UVA students looking to carpool to UVA events or to their hometowns",
