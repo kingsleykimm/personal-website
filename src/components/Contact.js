@@ -22,7 +22,7 @@ function Contact () {
                         <AiFillLinkedin size='30px'/>
                         <p>Linkedin</p>
                     </a>
-                    <a target="_blank" href="https://drive.google.com/file/d/17Okl_7gg8e3_tMoFIsyFxeONLK1v_IHF/view?usp=sharing" className="contact--div">
+                    <a target="_blank" href="https://drive.google.com/file/d/15sqD4NI7cNqeEzEqZx5eaETAi7qEBN2U/view?usp=sharing" className="contact--div">
                         <AiFillFilePdf size='30px'/>
                         <p>Resume</p>
                     </a>

@@ -5,8 +5,8 @@ const projectdata = [
         image: "https://github.com/UVA-MLSys/Interpretable-Timeseries/blob/main/docs/images/coronavirus.jpg?raw=true",
         desc: "Website we built for the time series research project we did in my internship",
         gitLink: "https://github.com/UVA-MLSys/Interpretable-Timeseries",
-        siteLink: "https://uva-mlsys.github.io/Interpretable-Timeseries/pages/introduction.html",
-        skills: [],
+        siteLink: "https://fast-reef-07304-cd2d19955e7b.herokuapp.com/",
+        skills: ["HTML/CSS", "Python"],
     },
     {
         title: "Hoober",

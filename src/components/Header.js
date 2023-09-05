@@ -16,7 +16,7 @@ function Header () {
                 </div>
                 <div className="social--links">
                     <div className="icon--wrapper resume--icon">
-                        <a target="_blank" href="https://drive.google.com/file/d/17Okl_7gg8e3_tMoFIsyFxeONLK1v_IHF/view?usp=sharing">
+                        <a target="_blank" href="https://drive.google.com/file/d/15sqD4NI7cNqeEzEqZx5eaETAi7qEBN2U/view?usp=sharing">
                             <div className="icon">
                                 <AiFillFilePdf size='50px'/> 
                             </div>
