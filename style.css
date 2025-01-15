@@ -1,0 +1,53 @@
+/* Basic reset/normalization */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  /* Use a light background color */
+  body {
+    background-color: #f5f5f5; /* or #fafafa or #f9f9f9 */
+    color: #333; /* text color */
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.6;
+    padding: 2rem;
+  }
+  
+  /* Sections spacing */
+  section {
+    margin-bottom: 2rem;
+  }
+  
+  /* Intro Section Styling */
+  .intro-section {
+    margin-bottom: 3rem;
+  }
+  
+  .intro-section h1 {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+  }
+  
+  .intro-section p {
+    font-size: 1.1rem;
+  }
+  
+  /* Experience Section */
+  .experience-section h2,
+  .whatever-else-section h2 {
+    font-size: 1.8rem;
+    margin-bottom: 1rem;
+    font-weight: bold;
+    color: #444;
+  }
+  
+  /* Paragraph Styling */
+  .experience-section p,
+  .whatever-else-section p {
+    font-size: 1rem;
+    color: #555;
+  }
+  
+  /* You can add more styling or classes as you like */
+  
