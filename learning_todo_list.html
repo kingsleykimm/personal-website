@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>My Simple Website</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+    <h2>Not Finished</h2>
+    <ul id="not-finished-list"></ul>
+
+    <h2>Finished</h2>
+    <ul id="finished-list"></ul>
+
+    <script>
+        const tasks = [
+            { text: "MIT Diffusion Course", url: "https://diffusion.csail.mit.edu/", finished: false },
+            { text: "Pattern Recognition and Machine Learning", url: "https://www.microsoft.com/en-us/research/wp-content/uploads/2006/01/Bishop-Pattern-Recognition-and-Machine-Learning-2006.pdf", finished: false},
+            { text: "Matrix Calc for ML and Beyond", url: "https://ocw.mit.edu/courses/18-s096-matrix-calculus-for-machine-learning-and-beyond-january-iap-2023/", finished: false},
+            { text: "ProbML", url: "https://probml.github.io/pml-book/book1.html", finished: false},
+            {text: "MacKay Information Theory textbook", finished: false}
+        ];
+
+        const notFinishedList = document.getElementById("not-finished-list");
+        const finishedList = document.getElementById("finished-list");
+
+        tasks.forEach(task => {
+            const listItem = document.createElement("li");
+            const anchor = document.createElement("a");
+            anchor.href = task.url;
+            anchor.textContent = task.text;
+            listItem.appendChild(anchor);
+
+            if (task.finished) {
+                finishedList.appendChild(listItem);
+            } else {
+                notFinishedList.appendChild(listItem);
+            }
+        });
+    </script>
+</body>
+</body>
+</html>
