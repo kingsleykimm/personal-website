@@ -1,0 +1,198 @@
+<!doctype html>
+<html class="not-ready lg:text-base overflow-y-scroll scroll-pt-14 scheme-light dark:scheme-dark" lang="en">
+
+<head prefix="og: https://ogp.me/ns# article: https://ogp.me/ns/article#">
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+  <meta name="generator" content="Zola v0.21.0" />
+  <title>The DeepGEMM Scheduler Struct</title>
+  <meta property="og:title" content="The DeepGEMM Scheduler Struct" />
+  <meta property="og:url" content="https://kingsleykim.dev/blog/deepgemm-scheduler/" />
+  <link rel="canonical" href="https://kingsleykim.dev/blog/deepgemm-scheduler/" />
+  <meta property="og:type" content="article" />
+  <meta property="article:published_time" content="2025-12-30T00:00:00+00:00" />
+  <!-- Begin Head inject -->
+  
+  <!-- End Head inject -->
+  <link rel="stylesheet" href="https://kingsleykim.dev/main.min.css?h=80ece4d015818ae93fff" />
+  <link rel="stylesheet" href="https://kingsleykim.dev/icons.css?h=7dd5ab449fa840fc01e2" />
+  <style>:root{--bg: #f4f4f5; --header: #e4e4e7;} :root.dark{--bg: #18181b; --header: #27272a;}</style>
+  <meta name="theme-color" data-light="#e4e4e7" data-dark="#27272a" content="#e4e4e7" />
+  <link rel="icon" type="image/x-icon" href="https://kingsleykim.dev/favicon.ico" />
+  <link rel="apple-touch-icon" type="image/png" href="https://kingsleykim.dev/apple-touch-icon.png?h=58bee300054c5308feb3" />
+  <link rel="icon" type="image/png" href="https://kingsleykim.dev/android-icon.png?h=8d80ec95446bd2c36826" />
+  <script src="https://kingsleykim.dev/js/zola-theme.min.js?h=26975b146d48e6ff41af"></script>
+  <!-- Begin Head End inject -->
+  
+  <!-- End Head End inject -->
+</head>
+
+<body class="text-black duration-100 ease-out dark:text-white">
+  <!-- Header -->
+<header class="header fixed top-0 z-40 mx-auto min-h-13 w-full">
+  <div class="mx-auto w-full max-w-4xl p-2.5 lg:flex lg:justify-between">
+    <div class="flex justify-between">
+      <div class="flex items-center min-h-8 overflow-hidden">
+        <button type="button" title="Go to home page [Alt + !]" accesskey="!"
+          onclick="window.location.href='https://kingsleykim.dev/';"
+          class="btn-home h-6 w-6 shrink-0 cursor-pointer text-[0px]
+            bg-center bg-no-repeat bg-cover [background-image:var(--icons-home,url(icons/home.svg))] dark:invert"
+        ></button>
+        <button type="button" title="Switch color scheme [Alt + $]" accesskey="$"
+          onclick="window.zolaTheme.color.toggle();"
+          class="btn-dark ml-4 h-6 w-6 shrink-0 cursor-pointer text-[0px]
+            bg-center bg-no-repeat bg-cover [background-image:var(--icons-btn-dark,url(icons/btn-dark.svg))]
+            dark:[background-image:var(--icons-btn-light,url(icons/btn-light.svg))] dark:invert"
+        ></button>
+      </div>
+    </div>
+  </div>
+</header>
+
+  <!-- Begin Body Start inject -->
+  
+  <!-- End Body Start inject -->
+  <main class="prose prose-neutral dark:prose-invert prose-pre:rounded-lg prose-img:rounded-lg
+    relative mx-auto min-h-[calc(100vh-4rem)] max-w-3xl px-4 pt-28 lg:pt-32 pb-12 wrap-break-word">
+    
+<article>
+  <!-- Begin Page Start inject -->
+  
+  <!-- End Page Start inject -->
+
+  <header class="mb-16">
+    <h1 class="my-0! pb-2.5">The DeepGEMM Scheduler Struct</h1>
+    <!-- Page Info -->
+<div class="text-sm antialiased opacity-80"><time
+      datetime="2025-12-30T00:00:00+00:00">2025-12-30</time><span
+        class="middot"></span><time
+    datetime="PT0H7M0S">7&nbsp;min</time><span
+      class="middot"></span>
+</div>
+
+  </header>
+  <!-- TOC -->
+<nav class="block-bg prose-a:secondary-link mb-12 rounded-lg p-2 text-lg">
+  <details>
+    <summary class="select-none py-0.5 lg:py-1 pl-3.5" title="[Alt + =]" accesskey="=">
+      <span class="cursor-pointer ml-0.5">Table of Contents</span>
+    </summary>
+    <ul class="ps-8">
+      <li class="ps-0.5">
+        <a class="no-underline hover:underline" href="#intro">Intro</a>
+      </li>
+      <li class="ps-0.5">
+        <a class="no-underline hover:underline" href="#the-scheduler-object">The Scheduler Object</a>
+        <ul>
+          <li class="ps-0.5">
+            <a class="no-underline hover:underline" href="#methods">Methods:</a>
+          </li>
+        </ul>
+      </li>
+    </ul>
+  </details>
+</nav>
+
+  <!-- Content -->
+  <section><h2 id="intro">Intro</h2>
+<p>While working on implementing the forward pass for the <a href="https://huggingface.co/Qwen/Qwen3-Next-80B-A3B-Thinking-FP8">Qwen3-Next-FP8</a>, I needed to learn about how to write efficient FP8 kernels, and DeepGEMM is a fantastic learning source for this. Looking through the code, I noticed a common class that kept appearing in all the GEMMs - the <a href="https://github.com/deepseek-ai/DeepGEMM/blob/main/deep_gemm/include/deep_gemm/common/scheduler.cuh">Scheduler struct</a>.</p>
+<p>This is the real workhorse behind the entire library, as it enables persistent kernel scheduling across the entire CTA grid. Persistent scheduling treats each SM as the unit of work instead of the GEMM tile. In cases where the problem size of a GEMM is too large (common in small MN, large K problems, or Grouped GEMMs), one iteration through all the SMs won't be enough to complete the problem, so computation is done in waves of tiles. This is where an explicit hardware-optimized tile scheduler can provide performance gains, and is almost necessary.</p>
+<p>This <a href="https://research.colfax-intl.com/cutlass-tutorial-persistent-kernels-and-stream-k/">Colfax tutorial</a> is a great read about persistent kernels, and as always, they provide intuitive visuals and some example code which is helpful.</p>
+<h2 id="the-scheduler-object">The Scheduler Object</h2>
+<p>Important template parameters / objects:</p>
+<ul>
+<li><strong>GemmType</strong>: chosen from batched or group configurations</li>
+<li><strong>Problem shape</strong>: BLOCK_M, BLOCK_N, numGroups, numSMs,</li>
+<li><strong>Num1DBlocksPerGroup</strong>: Used in Threadblock Swizzling, a technique to increase L2 cache hit rate</li>
+<li><strong>Grouped GEMM parameters</strong>: Grouped Layout, current_group_idx, current_m_cumsum</li>
+<li><strong>is_peer_cta_alive</strong>: public variable used in GEMMs to deal with boundary / odd dimension cases of multicast</li>
+</ul>
+<p>Constructor: Based on the GemmType, the parameters are initialized in different ways. DeepGEMM provides five different GemmTypes: Normal, Batched, MGroupedContiguous, MGroupedMasked, KGroupedContiguous. I'm going to leave off KGroupedContiguous for now. Normal and Batched are self-explanatory - the MGrouped* types are new to me and are actually used for <a href="https://huggingface.co/blog/moe">sparse MoEs</a>.</p>
+<p>For a given tensor of shape (batch_size, seq_len, hidden_dim), which is fed into the MoE layer, each token gets sent to a fixed number of experts. Usually though consecutive tokens are not sent to the same experts, so each row will require a different expert weight matrix. Thus we need to group a set of token rows that share an expert together to take advantage of GEMMs.</p>
+<p>MGroupedContiguous describes one way of doing this: it permutes the tensor in-place so that a set of tokens with the same expert is contiguous, and the entire tensor is still contiguous. MGroupedMasked instead constructs 'slabs' per expert, with the rows filled by any tokens that are routed to the ith expert, without contiguous guarantees. Both tensors use pad their M-dimensions (num_tokens) to a multiple of 64 to align with WGMMA specs.</p>
+<p>Another key difference between the MGrouped* variants is how their grouped_layouts are stored. Grouped_layouts is a uint32_t array that contains the expert values assigned to each M row.</p>
+<p>For MGroupedContiguous, the rows are stored in a contiguous matrix, with some padding values in between the end and start of different expert chunks. Thus it has the shape (num_m_blocks, BLOCK_M) - for a given grouped_layout[m_block_idx][out_row], the value will either be the index of an expert or -1, for padding value.</p>
+<p>For MGroupedMasked, since the matrices are not contiguous, grouped_layout is simpler, with length (kNumGroups), and each index just holds the number of rows this group/expert 'owns', since we don't need to worry about boundary conditions.</p>
+<h3 id="methods">Methods:</h3>
+<p>I am going to first start with the methods they use to perform thread-block swizzling, not to be confused with the <a href="https://docs.nvidia.com/cuda/parallel-thread-execution/#tensor-swizzling-modes">tensor swizzling</a> commonly done to avoid shared memory conflicts. Thread-block swizzling is a strategy to increase L2 cache rates when loading in either the M or N block tiles. If we swizzle across the N dimension of the output tile, with a swizzle size of 8, this means that for the current swizzle block, (num_m_blocks, SWIZZLE_SIZE),  only up to 8 of the N blocks are fetched. By keeping the swizzle size reasonable, these N blocks will be kept in L2 cache across the CTAs in the swizzle block.</p>
+<p>They implement a small heuristic search method:</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span style="color:#b48ead;">template </span><span>&lt;GemmType </span><span style="color:#d08770;">kGemmType</span><span>, uint32_t BLOCK_M, uint32_t BLOCK_N,
+</span><span>          uint32_t </span><span style="color:#d08770;">kNumSMs</span><span>, </span><span style="color:#b48ead;">bool </span><span style="color:#d08770;">kIsMulticastOnA</span><span>&gt;
+</span><span style="color:#b48ead;">static constexpr </span><span>uint32_t </span><span style="color:#8fa1b3;">get_num_1d_blocks_per_group</span><span>()
+</span></code></pre>
+<p>Where the candidates for the swizzle size are 8 or 16, and numSms is the number of sms used by the scheduler. kIsMulticastOnA is used to determine which direction the swizzle should be - the non-multicast direction. I noticed here that the scheduler doesn't support 2D multicast, which is a little rigid, but it makes sense for most decode settings where one of M/N will be comparably larger to the other.</p>
+<p>The method above is used to calculate the template variable kNum1DBlocksPerGroup for Scheduler, and used in the method:</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span>__device__ __forceinline__ </span><span style="color:#b48ead;">void
+</span><span>   </span><span style="color:#8fa1b3;">get_swizzled_block_idx</span><span>(</span><span style="color:#b48ead;">const </span><span>uint32_t &amp;</span><span style="color:#bf616a;">block_idx</span><span>, 
+</span><span>uint32_t &amp;</span><span style="color:#bf616a;">m_block_idx</span><span>, uint32_t &amp;</span><span style="color:#bf616a;">n_block_idx</span><span>) 
+</span></code></pre>
+<p>This takes in the current block_idx, which is a 1D index into the total number of blocks scheduled over the lifetime of a persistent kernel. It then identifies the direction of the swizzling, and the group_idx variable, which is the ith chunk when chunking the swizzle dimension by swizzle size. Afterwards, m_block_idx and n_block_idx are modified based off the dimensions of the swizzle chunk, and then it returns. It also provides a simple check for multicast settings where the tail blocks are odd - it then adaptively truncates the group of tail blocks by one, and then sets up a new group block for the last, odd block out.</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span>__device__ __forceinline__ </span><span style="color:#b48ead;">bool </span><span style="color:#8fa1b3;">get_next_block</span><span>(
+</span><span>   uint32_t &amp;</span><span style="color:#bf616a;">m_block_idx</span><span>, uint32_t &amp;</span><span style="color:#bf616a;">n_block_idx</span><span>)
+</span></code></pre>
+<p>This is the entrypoint to the tile-scheduler - every CTA/SM calls this to get assigned their next block in the problem space, which is first represented by the 1D index next_block_idx. Slightly different logic for each of the GemmTypes:</p>
+<p>MGroupedMasked:</p>
+<ul>
+<li>Iterate over each group until we get through all of them, or find the kth Group where next_block_idx is less than the cumulative sum of m_blocks so far, found through grouped_layout. Then return the threadblock swizzled index.</li>
+</ul>
+<p>Batched:</p>
+<ul>
+<li>group_idx = batch_idx, use that to find the local block_idx in the current batch. Then performs a small check on the Multicast dimension to figure out how to determine the major-axis of the tiles.</li>
+</ul>
+<p>MGroupedContiguous:</p>
+<ul>
+<li>The num_m_blocks is already equivalent across each group because of padding, num_n_block stays the same, so there is no need to change anything. Return by the threadblock swizzled index.</li>
+</ul>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span style="color:#b48ead;">template </span><span>&lt;</span><span style="color:#b48ead;">bool </span><span style="color:#d08770;">kWithGroupOffset</span><span>, IndexType </span><span style="color:#d08770;">kIndexType </span><span>= IndexType::MN&gt;
+</span><span>__device__ __forceinline__ uint32_t
+</span><span>  </span><span style="color:#8fa1b3;">get_global_idx</span><span>(</span><span style="color:#b48ead;">const </span><span>uint32_t </span><span style="color:#bf616a;">shape_dim</span><span>, </span><span style="color:#b48ead;">const </span><span>uint32_t </span><span style="color:#bf616a;">block_size</span><span>,
+</span><span>                 </span><span style="color:#b48ead;">const </span><span>uint32_t &amp;</span><span style="color:#bf616a;">block_idx</span><span>, </span><span style="color:#b48ead;">const </span><span>uint32_t
+</span><span>                 &amp;</span><span style="color:#bf616a;">m_block_idx </span><span>= </span><span style="color:#d08770;">0</span><span>) 
+</span></code></pre>
+<p>This method is pretty straightforward - it takes in the given shape_dim, i.e the problem size M, block_size : block_M, and then an important template kWithGroupOffset as well, and outputs the global_idx along the M/N/K dimension to load in from GMEM.
+The kWithGroupOffset variable, when set to true will advance to the appropriate group slice, for either M (activations) or N (weights).</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span>__device__ __forceinline__ </span><span style="color:#b48ead;">bool
+</span><span>  </span><span style="color:#8fa1b3;">is_tma_multicast_valid</span><span>(</span><span style="color:#b48ead;">const </span><span>uint32_t &amp;</span><span style="color:#bf616a;">m_block_idx</span><span>)
+</span></code></pre>
+<p>This is a short helper method that is really only used for the MGroupedContiguous case. What it does is check for boundary conditions on the m_block_idx, since it could be the case that two M-adjacent CTAs, which are participating in multicast together could be in different groups. Then multicast should not be used</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span>__device__ __forceinline__ </span><span style="color:#b48ead;">bool
+</span><span>  </span><span style="color:#8fa1b3;">is_computation_valid</span><span>(</span><span style="color:#b48ead;">const </span><span>uint32_t &amp;</span><span style="color:#bf616a;">m_block_idx</span><span>,
+</span><span>                       </span><span style="color:#b48ead;">const </span><span>uint32_t &amp;</span><span style="color:#bf616a;">m_offset</span><span>) </span><span style="color:#b48ead;">const
+</span></code></pre>
+<p>Another small method, that just checks for grouped GEMM cases whether the current block of rows that will be computed in the WGMMA start with an expert index or a padding index. If it starts with a padding index, then the entire tile is invalid and there is no point in wasting SM resources on it.</p>
+<p>That's all for the DeepGEMM Tile scheduler. I'm going to implement this and integrate it into my current FP8 GEMM kernel. Another scheduler to explore is the more powerful, expressive <a href="https://github.com/NVIDIA/cutlass/blob/main/include/cutlass/gemm/kernel/sm90_tile_scheduler_group.hpp#L130">Cutlass Schedulers</a> and how it implements Group and Stream-k scheduling with heuristics.</p>
+</section>
+  <hr />
+  <!-- Post Taxonomies -->
+
+  <!-- Begin Page End inject -->
+  
+  <!-- End Page End inject -->
+</article>
+
+  </main>
+  <!-- Footer -->
+<footer class="mx-auto flex lg:mt-5 max-w-3xl flex-wrap items-center px-4 py-3 text-sm opacity-60">
+  <div class="mr-auto basis-full lg:basis-1/2">
+  © <time datetime="2025">2025</time>
+  </div>
+  <div class="flex basis-full lg:basis-1/2 lg:justify-end">
+    <span class="mr-6 lg:ml-6">
+      <a class="link" href="https://www.getzola.org/" target="_blank">Powered by Zola</a>
+    </span>
+    <a class="link" href="https://www.getzola.org/themes/linkita/" target="_blank">&#9998; Linkita</a>
+  </div>
+  <!-- Begin Footer inject -->
+  
+  <!-- End Footer inject -->
+</footer>
+
+  
+
+  <!-- Begin Body End inject -->
+  
+  <!-- End Body End inject -->
+</body>
+
+</html>

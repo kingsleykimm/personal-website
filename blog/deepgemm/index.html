@@ -1,0 +1,535 @@
+<!doctype html>
+<html class="not-ready lg:text-base overflow-y-scroll scroll-pt-14 scheme-light dark:scheme-dark" lang="en">
+
+<head prefix="og: https://ogp.me/ns# article: https://ogp.me/ns/article#">
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+  <meta name="generator" content="Zola v0.21.0" />
+  <title>Exploring DeepGEMM FP8 kernels</title>
+  <meta property="og:title" content="Exploring DeepGEMM FP8 kernels" />
+  <meta property="og:url" content="https://kingsleykim.dev/blog/deepgemm/" />
+  <link rel="canonical" href="https://kingsleykim.dev/blog/deepgemm/" />
+  <meta property="og:type" content="article" />
+  <meta property="article:published_time" content="2025-12-30T00:00:00+00:00" />
+  <!-- Begin Head inject -->
+  
+  <!-- End Head inject -->
+  <link rel="stylesheet" href="https://kingsleykim.dev/main.min.css?h=80ece4d015818ae93fff" />
+  <link rel="stylesheet" href="https://kingsleykim.dev/icons.css?h=7dd5ab449fa840fc01e2" />
+  <style>:root{--bg: #f4f4f5; --header: #e4e4e7;} :root.dark{--bg: #18181b; --header: #27272a;}</style>
+  <meta name="theme-color" data-light="#e4e4e7" data-dark="#27272a" content="#e4e4e7" />
+  <link rel="icon" type="image/x-icon" href="https://kingsleykim.dev/favicon.ico" />
+  <link rel="apple-touch-icon" type="image/png" href="https://kingsleykim.dev/apple-touch-icon.png?h=58bee300054c5308feb3" />
+  <link rel="icon" type="image/png" href="https://kingsleykim.dev/android-icon.png?h=8d80ec95446bd2c36826" />
+  <script src="https://kingsleykim.dev/js/zola-theme.min.js?h=26975b146d48e6ff41af"></script>
+  <!-- Begin Head End inject -->
+  
+  <!-- End Head End inject -->
+</head>
+
+<body class="text-black duration-100 ease-out dark:text-white">
+  <!-- Header -->
+<header class="header fixed top-0 z-40 mx-auto min-h-13 w-full">
+  <div class="mx-auto w-full max-w-4xl p-2.5 lg:flex lg:justify-between">
+    <div class="flex justify-between">
+      <div class="flex items-center min-h-8 overflow-hidden">
+        <button type="button" title="Go to home page [Alt + !]" accesskey="!"
+          onclick="window.location.href='https://kingsleykim.dev/';"
+          class="btn-home h-6 w-6 shrink-0 cursor-pointer text-[0px]
+            bg-center bg-no-repeat bg-cover [background-image:var(--icons-home,url(icons/home.svg))] dark:invert"
+        ></button>
+        <button type="button" title="Switch color scheme [Alt + $]" accesskey="$"
+          onclick="window.zolaTheme.color.toggle();"
+          class="btn-dark ml-4 h-6 w-6 shrink-0 cursor-pointer text-[0px]
+            bg-center bg-no-repeat bg-cover [background-image:var(--icons-btn-dark,url(icons/btn-dark.svg))]
+            dark:[background-image:var(--icons-btn-light,url(icons/btn-light.svg))] dark:invert"
+        ></button>
+      </div>
+    </div>
+  </div>
+</header>
+
+  <!-- Begin Body Start inject -->
+  
+  <!-- End Body Start inject -->
+  <main class="prose prose-neutral dark:prose-invert prose-pre:rounded-lg prose-img:rounded-lg
+    relative mx-auto min-h-[calc(100vh-4rem)] max-w-3xl px-4 pt-28 lg:pt-32 pb-12 wrap-break-word">
+    
+<article>
+  <!-- Begin Page Start inject -->
+  
+  <!-- End Page Start inject -->
+
+  <header class="mb-16">
+    <h1 class="my-0! pb-2.5">Exploring DeepGEMM FP8 kernels</h1>
+    <!-- Page Info -->
+<div class="text-sm antialiased opacity-80"><time
+      datetime="2025-12-30T00:00:00+00:00">2025-12-30</time><span
+        class="middot"></span><time
+    datetime="PT0H22M0S">22&nbsp;min</time><span
+      class="middot"></span>
+</div>
+
+  </header>
+  <!-- TOC -->
+<nav class="block-bg prose-a:secondary-link mb-12 rounded-lg p-2 text-lg">
+  <details>
+    <summary class="select-none py-0.5 lg:py-1 pl-3.5" title="[Alt + =]" accesskey="=">
+      <span class="cursor-pointer ml-0.5">Table of Contents</span>
+    </summary>
+    <ul class="ps-8">
+      <li class="ps-0.5">
+        <a class="no-underline hover:underline" href="#intro">Intro</a>
+      </li>
+      <li class="ps-0.5">
+        <a class="no-underline hover:underline" href="#kernel">Kernel</a>
+      </li>
+      <li class="ps-0.5">
+        <a class="no-underline hover:underline" href="#prelim-wgmma-s-accumulator-layout">Prelim: WGMMA&#x27;s Accumulator Layout</a>
+      </li>
+      <li class="ps-0.5">
+        <a class="no-underline hover:underline" href="#kernel-prologues">Kernel Prologues</a>
+      </li>
+      <li class="ps-0.5">
+        <a class="no-underline hover:underline" href="#the-warpgroups-split">The Warpgroups Split</a>
+        <ul>
+          <li class="ps-0.5">
+            <a class="no-underline hover:underline" href="#tma-warpgroup">TMA Warpgroup</a>
+          </li>
+        </ul>
+      </li>
+      <li class="ps-0.5">
+        <a class="no-underline hover:underline" href="#math-warpgroup">Math Warpgroup</a>
+        <ul>
+          <li class="ps-0.5">
+            <a class="no-underline hover:underline" href="#setup">Setup</a>
+          </li>
+          <li class="ps-0.5">
+            <a class="no-underline hover:underline" href="#cool-compiler-trick">Cool Compiler Trick</a>
+          </li>
+          <li class="ps-0.5">
+            <a class="no-underline hover:underline" href="#computation-loop">Computation Loop</a>
+          </li>
+        </ul>
+      </li>
+      <li class="ps-0.5">
+        <a class="no-underline hover:underline" href="#tma-stores">TMA Stores</a>
+        <ul>
+          <li class="ps-0.5">
+            <a class="no-underline hover:underline" href="#swizzle-logic-inner-loop">Swizzle Logic (Inner Loop)</a>
+          </li>
+        </ul>
+      </li>
+    </ul>
+  </details>
+</nav>
+
+  <!-- Content -->
+  <section><h2 id="intro">Intro</h2>
+<p><a href="https://github.com/deepseek-ai/DeepGEMM">DeepGEMM</a> is a library of fp8 kernels written by the Deepseek team with fine-grained, 128 block/group scaling. It is one of the best learning resources for efficient, clean fp8 kernels because it provides the best balance between complexity and accessibility. Since I am going to be writing a few different FP8 kernels for the Qwen3-Next inference engine, I wanted to completely understand the FP8 GEMM, and use it as a starting point for writing other fp8 kernels.</p>
+<p>I'm going to skip past describing how NVFP8 and quantization work, but I want to briefly mention CuTLASS which is what the DeepGEMM is based out of. CuTLASS has also supported <a href="https://github.com/NVIDIA/cutlass/blob/d4e16f5d4e70cd95049e3708cbee01205abe43c0/include/cutlass/gemm/collective/sm90_mma_tma_gmma_ss_warpspecialized_fp8_blockwise_scaling.hpp">fp8 blockscaled GEMM</a> since version 3.7. However their implementation is fogged up by all the abstractions inside the repository, so DeepGEMM chose to write a simpler kernel with the same structure and some additional optimizations, albeit with much clearer code.</p>
+<h2 id="kernel">Kernel</h2>
+<p>I'm going to be looking at <a href="https://github.com/deepseek-ai/DeepGEMM/blob/9b680f428484625f4f35dc3617f134187c6bcd4a/deep_gemm/include/deep_gemm/impls/sm90_fp8_gemm_1d2d.cuh">this file</a>. This is a straightforward GEMM kernel which implements $Y = XW$ or $C = AB$, where X is the input activation, usually in the shape (batch_size, seq_len, w_in), and the weight vector $W$ with shape (w_out, w_in).</p>
+<p>A key difference from non-quantized GEMM is the presence of the scale factor tensors for both inputs, with $A$ being quantized with 1D 128-block scaling dynamically, while the weight vector is quantized with 2D (128, 128) block scaling. Thus if $A$ has shape $(M, K)$, the Scale Factor A (SFA) tensor has shape $(M,  \frac K  {128})$, and if B has shape $(K, N)$, then SFB tensor has shape $(\frac K {128}, \frac N {128})$. Scales are always fp32.</p>
+<h2 id="prelim-wgmma-s-accumulator-layout">Prelim: WGMMA's Accumulator Layout</h2>
+<p>After I read through the file a few times and transcribed it line by line, with additional comments as notes, I found a common shape across the GEMM tiles. Consistently, both the row and column dimensions of the output matrix D were being grouped into sizes of 8, here's a few lines where this happens:</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span style="color:#b48ead;">const auto</span><span> r_0 = warpIdx * </span><span style="color:#d08770;">16 </span><span>+ lane_idx / </span><span style="color:#d08770;">4</span><span>, r_1 = r_0 + </span><span style="color:#d08770;">8</span><span>;
+</span><span>
+</span><span>...
+</span><span>uint32_t num_former_iters = bN / </span><span style="color:#d08770;">8</span><span>;
+</span><span>uint32_t num_full_iters = num_former_iters;
+</span></code></pre>
+<p>These lines of code will make more sense later, in the full context of the kernel. The reason behind this seemingly arbitrary grouping tiling of 8 x 8 is because of one PTX instruction:</p>
+<pre data-lang="asm" style="background-color:#2b303b;color:#c0c5ce;" class="language-asm "><code class="language-asm" data-lang="asm"><span style="color:#8fa1b3;">stmatrix.sync.aligned.shape.num{.trans}{.</span><span style="color:#bf616a;">ss</span><span style="color:#8fa1b3;">}.type </span><span>[</span><span style="color:#8fa1b3;">p</span><span>], </span><span style="color:#8fa1b3;">r</span><span style="color:#65737e;">;
+</span><span>
+</span><span style="color:#8fa1b3;">.shape  = {.m8n8</span><span>, </span><span style="color:#8fa1b3;">.m16n8}</span><span style="color:#65737e;">;
+</span><span style="color:#8fa1b3;">.num    = {.x1</span><span>, </span><span style="color:#8fa1b3;">.x2</span><span>, </span><span style="color:#8fa1b3;">.x4}</span><span style="color:#65737e;">;
+</span><span style="color:#8fa1b3;">.</span><span style="color:#bf616a;">ss     </span><span style="color:#8fa1b3;">= {.shared{::cta}}</span><span style="color:#65737e;">;
+</span><span style="color:#8fa1b3;">.type   = {.b16</span><span>, </span><span style="color:#8fa1b3;">.b8}</span><span style="color:#65737e;">;
+</span></code></pre>
+<p>This instruction performs a load from register memory to shared memory across a single warp of threads, thus the <code>sync</code> keyword. The <code>shape</code> keyword describes the tile of elements that is loaded in with options between (8x8, 16x8) matrices, as well as a <code>num</code> variable that determines the number. In the FP8 kernel case, the output matrix has type bf16, because this balances both precision and memory. Thus we set <code>.b16</code> for the <code>type</code> argument. An example using a bf16 type, from the PTX docs:</p>
+<pre data-lang="asm" style="background-color:#2b303b;color:#c0c5ce;" class="language-asm "><code class="language-asm" data-lang="asm"><span style="color:#8fa1b3;">// Store four 8x8 matrices
+</span><span style="color:#8fa1b3;">.reg .b64 addr</span><span style="color:#65737e;">;
+</span><span style="color:#8fa1b3;">.reg .b32 r&lt;</span><span style="color:#d08770;">4</span><span style="color:#8fa1b3;">&gt;</span><span style="color:#65737e;">;
+</span><span style="color:#8fa1b3;">stmatrix.sync.aligned.m8n8.x4.b16 </span><span>[</span><span style="color:#8fa1b3;">addr</span><span>], </span><span style="color:#8fa1b3;">{r0</span><span>, </span><span style="color:#8fa1b3;">r1</span><span>, </span><span style="color:#8fa1b3;">r2</span><span>, </span><span style="color:#8fa1b3;">r3}</span><span style="color:#65737e;">;
+</span></code></pre>
+<p>The first argument, <code>addr</code> describes the 32bit / 64bit address of the top left corner of the matrix, and the next four variables are 32 bit that hold the values to be moved. The number of registers equals the number of matrices being loaded in, and since each one is 32bit, it actually holds 2 elements of the matrix. An entire warp fills an 8 x 8 matrix as such:</p>
+<figure>
+  <img src="/images/deepgemm/mma-stmatrix-fragments.png" alt="MMA Stmatrix fragments">
+  <figcaption><em>Source: <a href="https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-stmatrix">NVIDIA PTX Documentation</a></em></figcaption>
+</figure>
+<p>THus, we want to be aware of this tiling structure across the entire WGMMA problem shape of M x N. <a href="https://github.com/NVIDIA/cutlass/blob/7f5fe3edf123a336bf59b96e02cac7b13472aebd/include/cute/atom/mma_traits_sm90_gmma.hpp#L433">CuTLASS code</a> also references this, although without any link to the PTX documentation:</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span style="color:#b48ead;">template</span><span>&lt;</span><span style="color:#b48ead;">int</span><span> N&gt;
+</span><span style="color:#b48ead;">using </span><span>CLayout_64xN   = Layout&lt;Shape &lt;Shape &lt;  _4,_8, _4&gt;,Shape &lt; _2,_2,Int&lt;N/</span><span style="color:#d08770;">8</span><span>&gt;&gt;&gt;,
+</span><span>                              Stride&lt;Stride&lt;_128,_1,_16&gt;,Stride&lt;_64,_8,   _512&gt;&gt;&gt;;
+</span></code></pre>
+<p>The C Layout is formatted in the TV_Layout CuTLASS uses throughout the repository - it maps an input (thread_index, value_index) into the matrix shape. If this looks unfamiliar, read through the <a href="https://docs.nvidia.com/cutlass/media/docs/cpp/cute/01_layout.html">CuTE Layout</a> section. The first inner mode of the layout comes out to <code>(4,8,4) : (128, 1, 16)</code>, and corresponds to how the threads in a warpgroup are layed across a WGMMA tile - see that $4 * 8 * 4 = 128$. The first 4 in the shape corresponds to a stride of 128 elements, and describes the spacing between lanes in different warps.</p>
+<p>The more interesting shape is: <code>(2,2, N/8) : (64, 8, 512)</code>. This describes how the values in a given thread's registers are mapped across the output matrix. A visual always helps, so here's a nice <a href="https://gist.github.com/Chillee/e2b07157caeade8c6b0bdf463d10f833">gist by Horace He</a> that quickly graphs TV_Layouts. I just graphed the simple case where $N = 16$, and truncated only the first 16 rows, since this holds an entire warp.</p>
+<figure>
+  <img src="/images/deepgemm/tv_layout_c.png" alt="C_TV_Layout">
+</figure>
+<p>The layout is a column-major layout, following NVIDIA's column-major convention in all their libraries. The M dimension is always fixed to 64 rows for WGMMA instructions, so although the layout is itself column-major, it is mapping the (thread_index, value_index) to a physical row-major lyaout.</p>
+<p>The second 'row' of the (2,2) tile is separated 8 rows down, and is again contiguous for the two values. Notice the similarities of the (V0, V1) tile of the warp (T0-T31), and the mapping of the thread registers for the $8 \times 8$ matrix used in stmatrix. They exactly line up.</p>
+<p>Similarly, the (V2, V3) values for a warp make up another $8 \times 8$ matrix and so on. We can now look at the last mode in the value layout: $N/8$. As mentioned before, it chunks up the N column into groups of 8, so that in a single 8-column group the a warp of threads maps to the $16 \times 8$ tile exactly. This tile of two $8 \times 8$ stacked on each other is what is used in the x2 version of the stmatrix instruction.</p>
+<p>So this explains why we need to ensure that each thread in a WGMMA warpgroup will have its values split across chunks of 8 columns, and inside each 8-column chunk it holds 4 accumulator variables that correspond to the $(2,2)$ grid in the CuTLASS layout.</p>
+<h2 id="kernel-prologues">Kernel Prologues</h2>
+<p>Lines 33 - 141 in the kernel are mostly setup and establishing a bunch of <code>constexpr</code> that will come up later. I want to speed through these and explain the important ones as well as the ones that don't have an immediately apparent purpose.</p>
+<p>Block size checks:</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span>
+</span><span style="color:#bf616a;">DG_STATIC_ASSERT</span><span>(BLOCK_K == </span><span style="color:#d08770;">128</span><span>, &quot;</span><span style="color:#a3be8c;">Only support per-128-channel FP8 scaling</span><span>&quot;);
+</span><span style="color:#bf616a;">DG_STATIC_ASSERT</span><span>(</span><span style="color:#bf616a;">constexpr_ceil_div</span><span>(BLOCK_N, BLOCK_K) == </span><span style="color:#d08770;">1 </span><span>or (</span><span style="color:#bf616a;">constexpr_gcd</span><span>(BLOCK_N, BLOCK_K) == BLOCK_N - BLOCK_K), &quot;</span><span style="color:#a3be8c;">Too much B scales in a single block</span><span>&quot;);
+</span></code></pre>
+<p>The first one immediately checks that the block size for K is 128 in both A and B - the rest of the kernel is based off this assertion, so very important.</p>
+<p>The second assertion checks that there aren't too many B scales in the N direction of B. This kernel limits itself to at most two scale factors inside the current $(\mathrm{BLOCK_K}, \mathrm{BLOCK_N})$ tile to avoid more complex cases. Since $bK$ is fixed, the first statement in the or checks if $\mathrm{BLOCK_N} &lt; \mathrm{BLOCK_K}$ using a constexpr ceil div, but it's equivalent. The second condition is when $\mathrm{BLOCK_N} &gt;= \mathrm{BLOCK_K}$, and is just equivalent to asserting $\mathrm{BLOCK_N} &lt;= \mathrm{BLOCK_K} * 2 = 256$</p>
+<p>Next, the WGMMA atom fetcher:</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span style="color:#b48ead;">using </span><span>WGMMA = </span><span style="color:#b48ead;">typename</span><span> FP8MMASelector&lt;BLOCK_N&gt;::type;
+</span><span style="color:#bf616a;">DG_STATIC_ASSERT</span><span>(BLOCK_M % WGMMA::M == </span><span style="color:#d08770;">0 </span><span>or BLOCK_M &lt; WGMMA::M, &quot;</span><span style="color:#a3be8c;">Invalid block size</span><span>&quot;);
+</span></code></pre>
+<p>The first line uses the templated BLOCK_N to get the WGMMA atom that will be used throughout the kernel. The full method and class can be seen in their <a href="https://github.com/deepseek-ai/DeepGEMM/blob/main/deep_gemm/include/deep_gemm/common/sm90_utils.cuh#L35">github</a>. Note that they have a selector struct as well as the actual atom struct <code>FP8MMA</code> that calls into CuTLASS internals. The second assert is used to check the BLOCK_M dimensions are valid for the problem.</p>
+<p>Uniform scaling check:</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span style="color:#b48ead;">static constexpr bool</span><span> kMustUseUniformedScaleB = (BLOCK_K % BLOCK_N == </span><span style="color:#d08770;">0</span><span>);
+</span></code></pre>
+<p>This variable is very important and will come up often in the kernel. It describes whether for a given B tile of shape $(\mathrm{BLOCK_K}, \mathrm{BLOCK_N})$ you will need to load in one or multiple (two) scale factors. Two scale factors would be needed if BLOCK_N = 96, since now each BLOCK_N doesn't fit neatly into BLOCK_K, and there's an overlapping pattern. The first use of the variable is seen on line 74:</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span style="color:#65737e;">// shape_k_scales = ceil_div(K, BLOCK_K)
+</span><span style="color:#b48ead;">const </span><span>uint32_t&amp; smem_sfb_size = align&lt;uint32_t&gt;(shape_k_scales * (</span><span style="color:#d08770;">kMustUseUniformedScaleB </span><span>? </span><span style="color:#d08770;">1 </span><span>: </span><span style="color:#d08770;">2</span><span>) * sizeof(</span><span style="color:#b48ead;">float</span><span>), sizeof(Barrier));
+</span></code></pre>
+<p>When BLOCK_N = 96, kMustUseUniformedScaleB = false, and we need to make shared memory have size (shape_k_scales, 2).</p>
+<p>Shared Memory Alignment Check:</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span style="color:#65737e;">// Align to 1024 bytes for swizzle-128B
+</span><span style="color:#b48ead;">extern</span><span> __shared__ </span><span style="color:#8fa1b3;">__align__</span><span>(</span><span style="color:#d08770;">1024</span><span>) uint8_t smem_buffer[];
+</span><span style="color:#bf616a;">DG_STATIC_ASSERT</span><span>(SMEM_D_SIZE % </span><span style="color:#d08770;">1024 </span><span>== </span><span style="color:#d08770;">0</span><span>, &quot;</span><span style="color:#a3be8c;">Shared memory of A/B must be aligned to 1024 bytes</span><span>&quot;);
+</span></code></pre>
+<p>This check asserts that the shared memory tiles of A and B, which I'll refer to as sA and sB from now, are aligned to 1024 bytes. This is because of the <a href="https://docs.nvidia.com/cuda/parallel-thread-execution/#asynchronous-warpgroup-level-matrix-shared-memory-layout-matrix-descriptor">GMMA Matrix Descriptor Format Rules</a>. Specifically, the base offset is only 0 for 128B swizzling when the matrix start address in shared memory is aligned to a 1024-byte boundary. The DeepGEMM authors made sure to enforce 128B swizzling for sA and sB throughout the kernel.</p>
+<p>Scheduler Initialization:</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span style="color:#b48ead;">auto</span><span> scheduler = Scheduler&lt;</span><span style="color:#d08770;">kGemmType</span><span>, BLOCK_M, BLOCK_N, </span><span style="color:#d08770;">kNumGroups</span><span>, </span><span style="color:#d08770;">kNumTMAMulticast</span><span>, </span><span style="color:#d08770;">kIsTMAMulticastOnA</span><span>, </span><span style="color:#d08770;">kNumSMs</span><span>&gt;(shape_m, shape_n, shape_k, grouped_layout);
+</span></code></pre>
+<p>This initializes the Scheduler struct, which is a persistent tile scheduler, and especially important for GroupedGEMM scenarios. I wrote about this struct in a separate post (link here).</p>
+<p>The rest of the code until line 152 is some boilerplate, like setting up barriers and shared memory pointers, assigning registers, setting up a lambda function on line 143 that mirrors the <a href="https://github.com/NVIDIA/cutlass/blob/7f5fe3edf123a336bf59b96e02cac7b13472aebd/include/cutlass/pipeline/sm90_pipeline.hpp#L171">CuTLASS PipelineState struct</a>.</p>
+<h2 id="the-warpgroups-split">The Warpgroups Split</h2>
+<p>This kernel is <strong>warpgroup-specialized</strong>, which means that different warpgroups (128 threadgroups) perform different features. In this case, there is one warpgroup assigned to setting off TMA loads from GMEM, and at least one math warpgroup that performs the WGMMA.</p>
+<h3 id="tma-warpgroup">TMA Warpgroup</h3>
+<p>The TMA Warpgroup path is pretty simple - they set up a while loop with the scheduler, which keeps checking if there's another (m_block_idx, n_block_idx) to fetch. It then iterates through the K dimension using software pipelining and then initializes TMA loads for the A, B, and SFA (Scale Factor A) tensors. Two things to note: the SFA tensors load is below:</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span>tma_copy&lt;BLOCK_M, BLOCK_K, </span><span style="color:#d08770;">0</span><span>&gt;(&amp;tensor_map_sfa, &amp;full_barrier,
+</span><span>                             smem_sfa[stage_idx], </span><span style="color:#bf616a;">m_block_idx </span><span>* BLOCK_M, scheduler.</span><span style="color:#bf616a;">get_global_idx</span><span>&lt;</span><span style="color:#d08770;">kWithGroupOffsetA</span><span>&gt;(shape_k_scales, </span><span style="color:#d08770;">1</span><span>, k_block_idx),
+</span><span>                             num_tma_multicast_a);
+</span></code></pre>
+<p>The tma_copy method can be explored in more detail at this <a href="https://github.com/deepseek-ai/DeepGEMM/blob/main/deep_gemm/include/deep_gemm/common/tma_utils.cuh">link</a>. When looking at the method signature, you'll notice that the SFA is MN-major - this is intentional since each iteration of the K loop could be using multiple scale factors across the MN dimensions. Also, there is no load for the SFB - it is loaded directly through CUDA functions.</p>
+<p>One last thing that I really liked about the TMA section was DeepGEMM's choice to write a thin TMA wrapper. It's not overly complex, but a crucial feature is that the multicast is toggleable, since they directly call CuTLASS's <code>cute::SM90_TMA_LOAD_XD::copy()</code> method instead of using make_copy_atom. This allows them to handle ragged tiles and boundary conditions much more cleanly compared to vanilla CuTLASS, where you would need to pass in multiple TMA atoms to be able to toggle multicast.</p>
+<h2 id="math-warpgroup">Math Warpgroup</h2>
+<p>This is the meat of the kernel, so it deserves its own section.</p>
+<h3 id="setup">Setup</h3>
+<p>Let's first look at the setup, which involves creating the GMMA Descriptor, described in the <a href="https://docs.nvidia.com/cuda/parallel-thread-execution/#asynchronous-warpgroup-level-matrix-shared-memory-layout-matrix-descriptor">PTX docs</a>.</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span style="color:#b48ead;">auto</span><span> a_desc = </span><span style="color:#bf616a;">make_smem_desc</span><span>(smem_a[</span><span style="color:#d08770;">0</span><span>] + math_wg_idx * WGMMA::M * BLOCK_K, </span><span style="color:#d08770;">1</span><span>);
+</span><span style="color:#b48ead;">auto</span><span> b_desc = </span><span style="color:#bf616a;">make_smem_desc</span><span>(smem_b[</span><span style="color:#d08770;">0</span><span>], </span><span style="color:#d08770;">1</span><span>);
+</span></code></pre>
+<p>The helper function make_smem_desc is just a short function that assigns bits according to the Matrix Descriptor Format. WGMMA::M here is just the M dimension size of the WGMMA atom, which is always set to M = 64. <code>math_wg_idx</code> is the warpgroup idx the thread belongs to, so we shift the sA down by one tile.</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span style="color:#b48ead;">template </span><span>&lt;</span><span style="color:#b48ead;">class</span><span> PointerType&gt;
+</span><span>CUTE_DEVICE cute::GmmaDescriptor </span><span style="color:#8fa1b3;">make_smem_desc</span><span>(PointerType </span><span style="color:#bf616a;">smem_ptr</span><span>, </span><span style="color:#b48ead;">const int </span><span>&amp;</span><span style="color:#bf616a;">layout_type</span><span>, </span><span style="color:#b48ead;">const int </span><span>&amp;</span><span style="color:#bf616a;">LBO </span><span>= </span><span style="color:#d08770;">0</span><span>,
+</span><span>                                                </span><span style="color:#b48ead;">const int </span><span>&amp;</span><span style="color:#bf616a;">SBO </span><span>= </span><span style="color:#d08770;">1024</span><span>) {
+</span><span>  cute::GmmaDescriptor desc;
+</span><span>  uintptr_t base_address = static_cast&lt;uint32_t&gt;(</span><span style="color:#bf616a;">__cvta_generic_to_shared</span><span>(smem_ptr));
+</span><span>  desc.</span><span style="color:#bf616a;">bitfield</span><span>.</span><span style="color:#bf616a;">start_address_ </span><span>= (base_address &amp; </span><span style="color:#d08770;">0x3ffff</span><span>) &gt;&gt; </span><span style="color:#d08770;">4</span><span>;
+</span><span>  desc.</span><span style="color:#bf616a;">bitfield</span><span>.</span><span style="color:#bf616a;">layout_type_ </span><span>= </span><span style="color:#d08770;">1</span><span>; </span><span style="color:#65737e;">// always 128B swizzle
+</span><span>  desc.</span><span style="color:#bf616a;">bitfield</span><span>.</span><span style="color:#bf616a;">leading_byte_offset_ </span><span>= LBO &gt;&gt; </span><span style="color:#d08770;">4</span><span>;
+</span><span>  desc.</span><span style="color:#bf616a;">bitfield</span><span>.</span><span style="color:#bf616a;">stride_byte_offset_ </span><span>= SBO &gt;&gt; </span><span style="color:#d08770;">4</span><span>;
+</span><span>  desc.</span><span style="color:#bf616a;">bitfield</span><span>.</span><span style="color:#bf616a;">base_offset_ </span><span>= </span><span style="color:#d08770;">0</span><span>; </span><span style="color:#65737e;">// from shared memory alignment
+</span><span>  </span><span style="color:#65737e;">// matrix-descriptor-encode, from the docs takes the last 18 bytes, then
+</span><span>  </span><span style="color:#65737e;">// shifts down by 4 to create the 14 bits
+</span><span>  </span><span style="color:#b48ead;">return</span><span> desc;
+</span><span>}
+</span></code></pre>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span style="color:#b48ead;">const </span><span>uint32_t a_desc_lo = </span><span style="color:#bf616a;">__shfl_sync</span><span>(</span><span style="color:#d08770;">0xffffffff</span><span>, a_desc.</span><span style="color:#bf616a;">reg32_</span><span>[</span><span style="color:#d08770;">0</span><span>], </span><span style="color:#d08770;">0</span><span>);
+</span><span style="color:#b48ead;">const </span><span>uint32_t b_desc_lo = </span><span style="color:#bf616a;">__shfl_sync</span><span>(</span><span style="color:#d08770;">0xffffffff</span><span>, b_desc.</span><span style="color:#bf616a;">reg32_</span><span>[</span><span style="color:#d08770;">0</span><span>], </span><span style="color:#d08770;">0</span><span>);
+</span></code></pre>
+<p>At first, this line seems useless, since every thread already fetches a_desc. Apparently, doing this __shfl_sync no-op actually tells nvcc that a_desc_lo should be stored in an <strong>unified register</strong>, which are special registers that are shared by all the threads in a warp. This is an important optimization in kernels that creep to the physical register limit per thread, since it provides a 32x reduction. The <code>a_desc_lo</code> variable is also important - when examining the bitfield of the descriptor, it is the lower 32 bits of the 64 bit descriptor, which contains the SMEM address. This pointer will be moved around a lot throughout the loops.</p>
+<p>Next, we start the persistent scheduler while loop and load in the b-scales. Another important variable, <code>num_former_iters</code> is introduced here:</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span>uint32_t num_former_iters = BLOCK_N / </span><span style="color:#d08770;">8</span><span>, num_full_iters = num_former_iters;
+</span><span style="color:#b48ead;">if constexpr </span><span>(not </span><span style="color:#d08770;">kMustUseUniformedScaleB</span><span>) {
+</span><span>    num_former_iters = </span><span style="color:#bf616a;">min</span><span>(BLOCK_N, BLOCK_K - n_block_idx * BLOCK_N % BLOCK_K) / </span><span style="color:#d08770;">8</span><span>;
+</span><span>    num_full_iters = </span><span style="color:#bf616a;">min</span><span>(shape_n - n_block_idx * BLOCK_N, BLOCK_N) / </span><span style="color:#d08770;">8</span><span>;
+</span><span>}
+</span><span>uint32_t num_sfb = shape_k_scales * (num_former_iters &gt;= num_full_iters ? </span><span style="color:#d08770;">1 </span><span>: </span><span style="color:#d08770;">2</span><span>);
+</span></code></pre>
+<p>Notice the condition - recall this is what determines if it possible to have multiple B scale factors in a block. If this is true, we still need to determine whether the current B block needs one or two. Notice that both iters are in units of 8 columns, mirroring what was said in the Prologoue about the (8, 8) tile units. Let's go into the if-loop. Here, num_former_iters describes the remaining 8-column chunks from the previous scale factor, while num_full_iters describes the number of 8-column chunks left in the entire BLOCK_N tile. When num_former_iters &lt; num_full_iters, that means there needs to be another scale to fill that gap, i.e two scales.</p>
+<p>After determining the number, the B scales are loaded. One small note here is that the first warp doesn't participate in loading B-scales, since it is assigned to calling TMA stores from SMEM to GMEM for the output - this will be shown at the end of one iteration of the Math warpgroups.</p>
+<p><strong>M Dimension Wave Blocks</strong></p>
+<p>DeepGEMM chooses to create a WAVE_BLOCK_M variable that further chunks up the BLOCK_M dimension when BLOCK_M &gt; WGMMA::M:</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span style="color:#b48ead;">constexpr </span><span>uint32_t WAVE_BLOCK_M = BLOCK_M &lt;= WGMMA::M ? BLOCK_M : WGMMA::M * </span><span style="color:#d08770;">2</span><span>;
+</span><span style="color:#65737e;">// enforces BLOCK_M be a nice multiple of 128 / 64
+</span><span style="color:#bf616a;">DG_STATIC_ASSERT</span><span>(BLOCK_M % WAVE_BLOCK_M == </span><span style="color:#d08770;">0</span><span>, &quot;</span><span style="color:#a3be8c;">Invalid block sizes</span><span>&quot;);
+</span><span style="color:#65737e;">// Pick threads whose WGMMA results are to be stored in shared memory
+</span><span style="color:#bf616a;">DG_STATIC_ASSERT</span><span>(BLOCK_M &gt;= </span><span style="color:#d08770;">64 </span><span>or </span><span style="color:#d08770;">kNumMathThreads </span><span>== </span><span style="color:#d08770;">128</span><span>, &quot;</span><span style="color:#a3be8c;">Only one math warp group for `BLOCK_M &lt; 64`</span><span>&quot;);
+</span><span style="color:#b48ead;">constexpr </span><span>uint32_t kNumWGMMAStoreThreads = WAVE_BLOCK_M * (</span><span style="color:#d08770;">128 </span><span>/ WGMMA::M);
+</span><span style="color:#b48ead;">const bool</span><span> do_wgmma_store = BLOCK_M &gt;= WGMMA::M or warp_idx &lt; </span><span style="color:#d08770;">kNumWGMMAStoreThreads </span><span>/ </span><span style="color:#d08770;">32</span><span>;
+</span></code></pre>
+<p>The variable's purpose is more obvious when BLOCK_M is much larger than WGMMA::M, for example if BLOCK_M = 256, and WGMMA::M is always 64. In this case, the WAVE_BLOCK_M is set to twice the WGMMA atom dimension, and will use two warpgroups per wave. This two warpgroup limit is also an implicit limit not mentioned in the kernel.</p>
+<p>The WAVE_BLOCK_M variable also influences the constexpr kNumWGMMAStoreThreads variable, which is used as a predicator for a given thread's WGMMA output. That's why for the BLOCK_M &gt;= WGMMA::M case, all threads will participate since the BLOCK_M is large enough - when it is smaller the number of store threads is a fraction of the warpgroup's 128 threads, and we gate by warp index.</p>
+<h3 id="cool-compiler-trick">Cool Compiler Trick</h3>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span style="color:#65737e;">// The compiler must know the dynamic variable `num_former_iters`&#39;s real value
+</span><span style="color:#b48ead;">constexpr bool</span><span> kShouldOptimize = BLOCK_K / </span><span style="color:#bf616a;">constexpr_gcd</span><span>(BLOCK_K, BLOCK_N) &lt;= </span><span style="color:#d08770;">4 </span><span>and not </span><span style="color:#d08770;">kMustUseUniformedScaleB</span><span>;
+</span><span style="color:#b48ead;">constexpr </span><span>uint32_t kGap = </span><span style="color:#bf616a;">constexpr_gcd</span><span>(BLOCK_K, BLOCK_N) / </span><span style="color:#d08770;">8</span><span>;
+</span><span style="color:#b48ead;">constexpr </span><span>uint32_t kEnd = </span><span style="color:#d08770;">kShouldOptimize </span><span>? BLOCK_K / </span><span style="color:#d08770;">8 </span><span>: </span><span style="color:#d08770;">0</span><span>;
+</span><span>
+</span><span style="color:#65737e;">// Dispatch `num_former_iters` and launch MMAs
+</span><span>dispatch_num_former_iters&lt;</span><span style="color:#d08770;">0</span><span>, </span><span style="color:#d08770;">kGap</span><span>, </span><span style="color:#d08770;">kEnd</span><span>&gt;(</span><span style="color:#d08770;">kShouldOptimize </span><span>? num_former_iters : </span><span style="color:#d08770;">0</span><span>, [&amp;](</span><span style="color:#b48ead;">auto</span><span> _) { </span><span style="color:#65737e;">// ...
+</span></code></pre>
+<p>When I first saw this section of the code, I was extremely confused. This is right before the start of the blocked K loop that performed the WGMMA, but I could not understand what the purpose of the dispatch_num_former_iters method was or the inputs it took. After some back and forth with ChatGPT I found the reason and it is pretty elegant. Like the comment says, <code>num_former_iters</code> is a dynamic, runtime variable that the compiler doesn't know, which prevents potential compiler optimizations. We want to find a way to statically determine this variable, when possible.</p>
+<p>This is where the dispatch_num_former_iters method comes in:</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span style="color:#b48ead;">template </span><span>&lt;uint32_t </span><span style="color:#d08770;">kNumFormerIters</span><span>, uint32_t </span><span style="color:#d08770;">kGap</span><span>, uint32_t </span><span style="color:#d08770;">kEnd</span><span>, </span><span style="color:#b48ead;">typename</span><span> func_t&gt;
+</span><span>__device__ </span><span style="color:#b48ead;">void </span><span style="color:#8fa1b3;">dispatch_num_former_iters</span><span>(uint32_t </span><span style="color:#bf616a;">num_former_iters</span><span>, </span><span style="color:#b48ead;">const</span><span> func_t&amp; </span><span style="color:#bf616a;">func</span><span>) {
+</span><span>    </span><span style="color:#b48ead;">if </span><span>(num_former_iters == </span><span style="color:#d08770;">kNumFormerIters</span><span>) {
+</span><span>        </span><span style="color:#bf616a;">func</span><span>(cute::</span><span style="color:#bf616a;">Int</span><span>&lt;</span><span style="color:#d08770;">kNumFormerIters</span><span>&gt;{});
+</span><span>        </span><span style="color:#b48ead;">return</span><span>;
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">if constexpr </span><span>(</span><span style="color:#d08770;">kNumFormerIters </span><span>+ </span><span style="color:#d08770;">kGap </span><span>&lt;= </span><span style="color:#d08770;">kEnd</span><span>)
+</span><span>        </span><span style="color:#bf616a;">dispatch_num_former_iters</span><span>&lt;</span><span style="color:#d08770;">kNumFormerIters </span><span>+ </span><span style="color:#d08770;">kGap</span><span>, </span><span style="color:#d08770;">kGap</span><span>, </span><span style="color:#d08770;">kEnd</span><span>&gt;(num_former_iters, func);
+</span><span>}
+</span></code></pre>
+<p>During compile-time, it will perform a linear search, starting from the initial value of <code>kNumFormerIters</code>, and adding values of kGap until it finds the dynamic variable num_former_iters, or it reaches the end of the possible values. If it find the value, it then calls the lambda func passed in, which in our case is the WGMMA logic. Another way to write this, without templates is:</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span style="color:#b48ead;">while </span><span>(</span><span style="color:#d08770;">kNumFormerIters </span><span>!= num_former_iters &amp;&amp; </span><span style="color:#d08770;">kNumFormerIters </span><span>+ </span><span style="color:#d08770;">kGap </span><span>&lt;= </span><span style="color:#d08770;">kEnd</span><span>) {
+</span><span>    </span><span style="color:#d08770;">kNumFormerIters </span><span>+= </span><span style="color:#d08770;">kGap</span><span>;
+</span><span>}
+</span><span style="color:#b48ead;">if </span><span>(</span><span style="color:#d08770;">kNumFormerIters </span><span>&lt; </span><span style="color:#d08770;">kEnd</span><span>) </span><span style="color:#bf616a;">func</span><span>(</span><span style="color:#d08770;">kNumFormerIters</span><span>)
+</span></code></pre>
+<p>In order to understand the three variables <code>kShouldOptimize, kGap, kEnd</code>, we now need to use a little number theory. We are only concerned with num_former_iters when there can be more than one B scale in a block. This happens when the boundary of a scale factor is in the middle of a B block:</p>
+<figure>
+  <img src="/images/deepgemm/num_former_iters.png" alt="">
+<figure>
+If we set n_block_idx to $ni$, then gap is $nB * \mathrm{BLOCK_N} \mod \mathrm{BLOCK_K}$, since $\mathrm{BLOCK_K} = 128$ always. The modulus operator defines a cycle of numbers, which are the possible values gap can take, and the cycle length is BLOCK_K. However, when BLOCK_N and BLOCK_K have a nontrivial gcd, we can use this to decrease the cycle length since:
+$$
+g = \mathrm{gcd}(\mathrm{BLOCK_K}, \mathrm{BLOCK_N}) \\
+\implies bK * g = \mathrm{BLOCK_K}, bN * g = \mathrm{BLOCK_N}, \mathrm{gcd}(bK, bN) = 1 \\
+nB * \mathrm{BLOCK_N} \mod  \mathrm{BLOCK_K} \implies nB * g * bN \mod (g *bK ) \\
+= g * nB (bN \mod bK)
+$$
+Now the cycle length has been reduced to $bK = \frac{\mathrm{BLOCK_K}}{g}$. Notice this variable also appears in `kShouldOptimize`, where we check if the cycle length is less than or equal to 4. Since the cycle length is the values the compiler must search over, we don't want it to be too large, otherwise build times will take too long. When it is larger than 4, kShouldOptimize is false and we see in the dispatch_num_former_iters call that num_former_iters is set to 0, and the compiler doesn't search.
+<p>If kShouldOptimize IS true, then the search is performed, and here the kGap variable is how much the gap increases per iteration of the cycle. This can again be seen by looking at the relation $\mathrm{gap} = g * nB (bN \mod bK)$ - all variables are fixed beside the block idx $nB$, so incrementing the cycle increments the gap in intervals of the GCD. The kEnd variable describes the end of the scale range, and notice that both kGap and kEnd are again in units of $N/8$, persisting the 8-column chunks.</p>
+<h3 id="computation-loop">Computation Loop</h3>
+<p>We can now begin the actual K-tiled loop for WGMMA. This loop has a two loop structure:</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span style="color:#65737e;">// basic k tile loop
+</span><span style="color:#b48ead;">for </span><span>(</span><span style="color:#b48ead;">int</span><span> k_block_idx = </span><span style="color:#d08770;">0</span><span>; k_block_idx &lt; num_total_k_blocks; </span><span style="color:#bf616a;">advance_pipeline</span><span>(k_block_idx))
+</span><span>    </span><span style="color:#65737e;">// loop across the M block waves
+</span><span>    </span><span style="color:#b48ead;">for </span><span>(uint32_t local_idx = </span><span style="color:#d08770;">0</span><span>; local_idx &lt; BLOCK_M / WAVE_BLOCK_M; ++ local_idx)
+</span><span>        </span><span style="color:#65737e;">// wgmma logic
+</span></code></pre>
+<p>The outer loop is not that interesting - it moves the shared memory addresses according to the current stage / pipeline state, and loads the current B and A scales, ensuring the appropriate ones are loaded to match the 2 x 2 grid described in the Prelim section. The inner loop contains several interesting parts, beginning with the kNumAccum. This is a variable from the WGMMA atom, <code>kNumAccum = WGMMA::M * WGMMA::N / 128</code>. It describes the number of accumulator registers each thread in a warpgroup requires for a WGMMA, and <code>WGMMA::M = 64</code> is a constant, so <code>kNumAccum = 64 * WGMMA::N / 128 = WGMMA::N / 2</code>.</p>
+<p>Then, the actual WGMMA operation is performed:</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span style="color:#b48ead;">#pragma</span><span> unroll
+</span><span style="color:#b48ead;">for </span><span>(uint32_t i = </span><span style="color:#d08770;">0</span><span>; i &lt; WGMMA::</span><span style="color:#d08770;">kNumAccum</span><span>; ++ i)
+</span><span>    </span><span style="color:#bf616a;">warpgroup_fence_operand</span><span>(accum[i]);
+</span><span style="color:#bf616a;">warpgroup_arrive</span><span>();
+</span><span style="color:#b48ead;">#pragma</span><span> unroll
+</span><span style="color:#b48ead;">for </span><span>(uint32_t k = </span><span style="color:#d08770;">0</span><span>; k &lt; BLOCK_K / WGMMA::K; ++ k) {
+</span><span>    a_desc.</span><span style="color:#bf616a;">reg32_</span><span>[</span><span style="color:#d08770;">0</span><span>] = a_desc_base_lo + (</span><span style="color:#bf616a;">m_offset </span><span>* BLOCK_K + k * WGMMA::K) / </span><span style="color:#d08770;">16</span><span>;
+</span><span>    b_desc.</span><span style="color:#bf616a;">reg32_</span><span>[</span><span style="color:#d08770;">0</span><span>] = b_desc_base_lo + k * WGMMA::K / </span><span style="color:#d08770;">16</span><span>;
+</span><span>    WGMMA::</span><span style="color:#bf616a;">wgmma</span><span>(a_desc, b_desc, accum, k);
+</span><span>}
+</span><span style="color:#bf616a;">warpgroup_commit_batch</span><span>();
+</span><span style="color:#b48ead;">#pragma</span><span> unroll
+</span><span style="color:#b48ead;">for </span><span>(uint32_t i = </span><span style="color:#d08770;">0</span><span>; i &lt; WGMMA::</span><span style="color:#d08770;">kNumAccum</span><span>; ++ i)
+</span><span>    </span><span style="color:#bf616a;">warpgroup_fence_operand</span><span>(accum[i]);
+</span><span>warpgroup_wait&lt;</span><span style="color:#d08770;">0</span><span>&gt;();
+</span></code></pre>
+<p>These functions are all CuTLASS helpers that wrap PTX instructins - the first unrolled loop prepares the accumulator registers with a memory fence to ensure ordering of reads and writes. The next loop performs a loop over the BLOCK_K dimension in chunks of the K size of the WGMMA operation, advancing the base shared memory address of the matrix descriptor appropriately. The last unrolled loop is cleanup.</p>
+<p>We then come to the promotion logic - manual promotion per WAVE_BLOCK_M size of WGMMA is necessary. The DeepGEMM authors realized that the FP8 tensor cores used an accumulation strategy that used only 14 bits of precision instead of the 32 bits of FP32 - this led to writing this manual promotion:</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span style="color:#b48ead;">float</span><span> scale_0_0 = scale_a_0 * scale_b_0, scale_1_0 = scale_a_1 * scale_b_0;
+</span><span style="color:#b48ead;">float</span><span> scale_0_1, scale_1_1;
+</span><span style="color:#b48ead;">if constexpr </span><span>(not </span><span style="color:#d08770;">kMustUseUniformedScaleB</span><span>)
+</span><span>    scale_0_1 = scale_a_0 * scale_b_1, scale_1_1 = scale_a_1 * scale_b_1;
+</span><span>
+</span><span style="color:#b48ead;">auto</span><span> shifted_accum = final_accum + WGMMA::</span><span style="color:#d08770;">kNumAccum </span><span>* local_idx;
+</span><span style="color:#b48ead;">#pragma</span><span> unroll
+</span><span style="color:#b48ead;">for </span><span>(uint32_t i = </span><span style="color:#d08770;">0</span><span>; i &lt; WGMMA::</span><span style="color:#d08770;">kNumAccum </span><span>/ </span><span style="color:#d08770;">4</span><span>; ++ i) {
+</span><span>    </span><span style="color:#65737e;">// NOTES: for unrolled `num_former_iters` cases, we expect the compiler to automatically make it a constant
+</span><span>    </span><span style="color:#b48ead;">const bool</span><span>&amp; predicate = </span><span style="color:#d08770;">kMustUseUniformedScaleB </span><span>or i &lt; num_former_iters;
+</span><span>    shifted_accum[i * </span><span style="color:#d08770;">4 </span><span>+ </span><span style="color:#d08770;">0</span><span>] += (predicate ? scale_0_0 : scale_0_1) * accum[i * </span><span style="color:#d08770;">4 </span><span>+ </span><span style="color:#d08770;">0</span><span>];
+</span><span>    shifted_accum[i * </span><span style="color:#d08770;">4 </span><span>+ </span><span style="color:#d08770;">1</span><span>] += (predicate ? scale_0_0 : scale_0_1) * accum[i * </span><span style="color:#d08770;">4 </span><span>+ </span><span style="color:#d08770;">1</span><span>];
+</span><span>    shifted_accum[i * </span><span style="color:#d08770;">4 </span><span>+ </span><span style="color:#d08770;">2</span><span>] += (predicate ? scale_1_0 : scale_1_1) * accum[i * </span><span style="color:#d08770;">4 </span><span>+ </span><span style="color:#d08770;">2</span><span>];
+</span><span>    shifted_accum[i * </span><span style="color:#d08770;">4 </span><span>+ </span><span style="color:#d08770;">3</span><span>] += (predicate ? scale_1_0 : scale_1_1) * accum[i * </span><span style="color:#d08770;">4 </span><span>+ </span><span style="color:#d08770;">3</span><span>];
+</span><span>}
+</span></code></pre>
+<p>This promotion code makes more sense when looking at the layout that it is following, the 8 x 8 matrices from the stmatrix PTX instruction:</p>
+<figure>
+  <img src="/images/deepgemm/mma-stmatrix-fragments.png" alt="MMA Stmatrix fragments">
+  <figcaption><em>Source: <a href="https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-stmatrix">NVIDIA PTX Documentation</a></em></figcaption>
+</figure>
+<p>Remember that for the (x2) instruction DeepGEMM uses, there is another 8 x 8 matrix stacked below this one, with the same format copied down. The first three lines create the composite scales. Each thread is always writing to two distinct rows in the 16 x 8 output, so we make sure to have two scales, <code>scale_0_0, scale_1_0</code>. We also cover the case where two scales may be needed in the column direction, depending on which 8-column chunk we are using, by loading in another two-row column of scales.</p>
+<p>The last unrolled loop is the actual promotion loop, where we multiply-add the scale factors of the output matrix with the FP32 values in the <code>accum</code> register. The predicate variable is used to determine whether to use the second column of scale factors, depending on which 8-column chunk we are in. Note that <code>kNumAccum / 4 = (N / 2) / 4</code>, so the loop variable serves a dual purpose as a iterator over 8-column chunks and 4 WGMMA accumulator variables.</p>
+<h2 id="tma-stores">TMA Stores</h2>
+<p>This is the final stage of the kernel, where we finally use the stmatrix instruction to load the register values into shared memory. Since we are using a TMA store instruction from SMEM to GMEM, and stmatrix is a direct data transfer, we need to manually write the swizzling logic ourselves.</p>
+<p>Here are some important checks and variables:</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span style="color:#b48ead;">constexpr </span><span>uint32_t kNumElemBytes = sizeof(nv_bfloat16);
+</span><span style="color:#b48ead;">constexpr </span><span>uint32_t TMA_D_BLOCK_N = </span><span style="color:#d08770;">kSwizzleDMode </span><span>== </span><span style="color:#d08770;">0 </span><span>? BLOCK_N : (</span><span style="color:#d08770;">kSwizzleDMode </span><span>/ </span><span style="color:#d08770;">kNumElemBytes</span><span>);
+</span><span style="color:#b48ead;">constexpr </span><span>uint32_t WGMMA_M_PER_WARP = WGMMA::M / </span><span style="color:#d08770;">4</span><span>;
+</span><span style="color:#bf616a;">DG_STATIC_ASSERT</span><span>(BLOCK_M % </span><span style="color:#d08770;">8 </span><span>== </span><span style="color:#d08770;">0</span><span>, &quot;</span><span style="color:#a3be8c;">Invalid swizzling atom</span><span>&quot;);
+</span><span style="color:#bf616a;">DG_STATIC_ASSERT</span><span>(BLOCK_N % TMA_D_BLOCK_N == </span><span style="color:#d08770;">0 </span><span>and BLOCK_N / TMA_D_BLOCK_N &lt;= </span><span style="color:#d08770;">32</span><span>,
+</span><span>                &quot;</span><span style="color:#a3be8c;">Unaligned TMA store or too many TMA store instructions</span><span>&quot;);
+</span><span style="color:#bf616a;">DG_STATIC_ASSERT</span><span>(TMA_D_BLOCK_N % </span><span style="color:#d08770;">8 </span><span>== </span><span style="color:#d08770;">0</span><span>, &quot;</span><span style="color:#a3be8c;">Invalid TMA block N</span><span>&quot;);
+</span></code></pre>
+<p><code>TMA_D_BLOCK_N</code> is the width of the swizzle atom in output elements, or without swizzling it is the entire block.</p>
+<p>The first assertion checks that the number of SMEM rows is a multiple of 8 - this is required by the <a href="https://docs.nvidia.com/cuda/parallel-thread-execution/#asynchronous-warpgroup-level-matrix-shared-memory-layout">PTX Shared Memory Matrix Layout</a>, where a K-major atom is always 8 rows.</p>
+<p>The second assertion checks when swizzling that the swizzle size in elements evenly divides the SMEM column size, and also that the number of swizzle atoms across a column is less than the warp size, because only the first warp will carry out TMA store instructions.</p>
+<p>The third assertion checks we can divide the number of elements by 8, from the 8 column requirement of stmatrix instructions.</p>
+<p>Here's the entire double looped code of the swizzle calculation + SMEM store, we care mostly about the code block in the inner most loop:</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span style="color:#bf616a;">DG_STATIC_ASSERT</span><span>(WGMMA::</span><span style="color:#d08770;">kNumAccum </span><span>% </span><span style="color:#d08770;">4 </span><span>== </span><span style="color:#d08770;">0</span><span>, &quot;</span><span style="color:#a3be8c;">Invalid STSM x2 vectorization</span><span>&quot;);
+</span><span style="color:#b48ead;">#pragma</span><span> unroll
+</span><span style="color:#b48ead;">for </span><span>(uint32_t local_idx = </span><span style="color:#d08770;">0</span><span>; local_idx &lt; BLOCK_M / WAVE_BLOCK_M; ++ local_idx) {
+</span><span>    </span><span style="color:#b48ead;">auto </span><span style="color:#bf616a;">m_offset </span><span>= local_idx * WAVE_BLOCK_M;
+</span><span>    </span><span style="color:#b48ead;">auto</span><span> shifted_accum = final_accum + WGMMA::</span><span style="color:#d08770;">kNumAccum </span><span>* local_idx;
+</span><span>    </span><span style="color:#b48ead;">#pragma</span><span> unroll
+</span><span>    </span><span style="color:#b48ead;">for </span><span>(</span><span style="color:#b48ead;">auto</span><span> i = </span><span style="color:#d08770;">0</span><span>; i &lt; WGMMA::</span><span style="color:#d08770;">kNumAccum </span><span>/ </span><span style="color:#d08770;">4</span><span>; ++ i) {
+</span><span>        </span><span style="color:#65737e;">// Swizzle or padding into the correct address
+</span><span>        uint8_t* smem_ptr = </span><span style="color:#d08770;">nullptr</span><span>;
+</span><span>        </span><span style="color:#b48ead;">if constexpr </span><span>(</span><span style="color:#d08770;">kSwizzleDMode </span><span>&gt; </span><span style="color:#d08770;">0</span><span>) {
+</span><span>            </span><span style="color:#65737e;">// Calculate the swizzling atom offset and in-atom offset
+</span><span>            </span><span style="color:#b48ead;">constexpr </span><span>uint32_t </span><span style="color:#d08770;">kNumBankGroupBytes </span><span>= </span><span style="color:#d08770;">16</span><span>;
+</span><span>            </span><span style="color:#b48ead;">auto</span><span> atom_offset = i / (TMA_D_BLOCK_N / </span><span style="color:#d08770;">8</span><span>), in_atom_offset = i % (TMA_D_BLOCK_N / </span><span style="color:#d08770;">8</span><span>);
+</span><span>
+</span><span>            </span><span style="color:#65737e;">// Calculate the index of the bank group to be written in the atom
+</span><span>            </span><span style="color:#b48ead;">auto</span><span> bank_group_index = in_atom_offset + lane_idx * (</span><span style="color:#d08770;">kSwizzleDMode </span><span>/ </span><span style="color:#d08770;">kNumBankGroupBytes</span><span>);
+</span><span>
+</span><span>            </span><span style="color:#65737e;">// Reshape the atom in another view and swizzle
+</span><span>            </span><span style="color:#65737e;">//  - original: `(BLOCK_M, kSwizzleDMode / kNumBankGroupBytes)`
+</span><span>            </span><span style="color:#65737e;">//  - new: `(BLOCK_M * kSwizzleDMode / kNumBankGroupBytes / 8, 8)`
+</span><span>            </span><span style="color:#b48ead;">constexpr bool </span><span style="color:#d08770;">kHasShortcut </span><span>= (</span><span style="color:#d08770;">kSwizzleDMode </span><span>/ </span><span style="color:#d08770;">kNumBankGroupBytes</span><span>) == </span><span style="color:#d08770;">8</span><span>;
+</span><span>            </span><span style="color:#b48ead;">auto</span><span> row = </span><span style="color:#d08770;">kHasShortcut </span><span>? (in_atom_offset / </span><span style="color:#d08770;">8 </span><span>+ lane_idx) : (bank_group_index / </span><span style="color:#d08770;">8</span><span>);
+</span><span>            </span><span style="color:#b48ead;">auto</span><span> col = </span><span style="color:#d08770;">kHasShortcut </span><span>? (in_atom_offset) : (bank_group_index % </span><span style="color:#d08770;">8</span><span>);
+</span><span>            col ^= row % (</span><span style="color:#d08770;">kSwizzleDMode </span><span>/ </span><span style="color:#d08770;">16</span><span>);
+</span><span>
+</span><span>            </span><span style="color:#65737e;">// Add back into the base pointer
+</span><span>            </span><span style="color:#65737e;">// NOTES: think twice before modifying this, as changes may affect the number of instructions
+</span><span>            smem_ptr = reinterpret_cast&lt;uint8_t*&gt;(smem_d) +                </span><span style="color:#65737e;">// Base pointer
+</span><span>                warp_idx * (WGMMA_M_PER_WARP * </span><span style="color:#d08770;">kSwizzleDMode</span><span>) +            </span><span style="color:#65737e;">// Warp offset
+</span><span>                </span><span style="color:#bf616a;">m_offset </span><span>* </span><span style="color:#d08770;">kSwizzleDMode </span><span>+                                 </span><span style="color:#65737e;">// Wave offset
+</span><span>                atom_offset * BLOCK_M * </span><span style="color:#d08770;">kSwizzleDMode </span><span>+                    </span><span style="color:#65737e;">// Swizzle atom offset (constants)
+</span><span>                row * (</span><span style="color:#d08770;">kNumBankGroupBytes </span><span>* </span><span style="color:#d08770;">8</span><span>) + col * </span><span style="color:#d08770;">kNumBankGroupBytes</span><span>; </span><span style="color:#65737e;">// In-atom offset
+</span><span>        } </span><span style="color:#b48ead;">else </span><span>{
+</span><span>            </span><span style="color:#65737e;">// No swizzling, just padding
+</span><span>            smem_ptr = reinterpret_cast&lt;uint8_t*&gt;(smem_d + (</span><span style="color:#bf616a;">m_offset </span><span>+ warp_idx * WGMMA_M_PER_WARP + lane_idx) * BLOCK_N + i * </span><span style="color:#d08770;">8</span><span>);
+</span><span>        }
+</span><span>
+</span><span>        </span><span style="color:#65737e;">// NOTES: only 16 lanes&#39; addresses are used
+</span><span>        SM90_U32x2_STSM_N&lt;nv_bfloat162&gt;::</span><span style="color:#bf616a;">copy</span><span>(
+</span><span>            </span><span style="color:#bf616a;">__float22bfloat162_rn</span><span>({shifted_accum[i * </span><span style="color:#d08770;">4 </span><span>+ </span><span style="color:#d08770;">0</span><span>], shifted_accum[i * </span><span style="color:#d08770;">4 </span><span>+ </span><span style="color:#d08770;">1</span><span>]}),
+</span><span>            </span><span style="color:#bf616a;">__float22bfloat162_rn</span><span>({shifted_accum[i * </span><span style="color:#d08770;">4 </span><span>+ </span><span style="color:#d08770;">2</span><span>], shifted_accum[i * </span><span style="color:#d08770;">4 </span><span>+ </span><span style="color:#d08770;">3</span><span>]}),
+</span><span>            smem_ptr
+</span><span>        );
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<h3 id="swizzle-logic-inner-loop">Swizzle Logic (Inner Loop)</h3>
+<p>To preface, the goal of this code block is to take the convert the row-major SMEM output matrix of shape (BLOCK_M, BLOCK_N) into shape (BLOCK_N / TMA_D_BLOCK_N, BLOCK_M, TMA_D_BLOCK_N), which fits the TMA store shape. A diagram may be more straightforward:</p>
+<figure>
+  <img src="/images/deepgemm/tma_layout.png" alt="TMA Layout Transformation">
+  <figcaption><em>Transforming the row-major SMEM output into TMA-compatible layout</em></figcaption>
+</figure>
+<p>I'm going to dissect the code block chunk by chunk, starting with the offset calculations. The non-swizzle case is straightforward.</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span style="color:#65737e;">// Calculate the swizzling atom offset and in-atom offset
+</span><span style="color:#b48ead;">constexpr </span><span>uint32_t kNumBankGroupBytes = </span><span style="color:#d08770;">16</span><span>;
+</span><span style="color:#b48ead;">auto</span><span> atom_offset = i / (TMA_D_BLOCK_N / </span><span style="color:#d08770;">8</span><span>), in_atom_offset = i % (TMA_D_BLOCK_N / </span><span style="color:#d08770;">8</span><span>);
+</span><span>
+</span><span style="color:#65737e;">// Calculate the index of the bank group to be written in the atom
+</span><span style="color:#b48ead;">auto</span><span> bank_group_index = in_atom_offset + lane_idx * (</span><span style="color:#d08770;">kSwizzleDMode </span><span>/ </span><span style="color:#d08770;">kNumBankGroupBytes</span><span>);
+</span></code></pre>
+<p>The <code>kNumBankGroupBytes</code> variable represents the units of the swizzled shared memory pointer, since this matches the column width of the stmatrix in bytes - 8 x size(bf16) = 16. Another interpretation, which Gemini told me is that is the size of bank group. A bank group, which is four shared memory bank (4 * 4B = 16B) is a common hardware access width.</p>
+<p>We then calculate the atom_offset and in_atom_offset - these are also calculated in units of 8-column chunks once again. The atom offset will be used to determine which TMA_D_BLOCK_N size column to place in.</p>
+<p>We then use the bank_group_index to calculate the write addresses of the stmatrix instruction. This is a linearized index of the below row-major layout, where everything is in units of per 8-output values. Here, the in_atom_offset describes the column index, which advances each iteration of the inner loop. The lane_idx corresponds to the row index of the swizzle atom, which is also chunked by 16 B, or 8-values. Thus the units line up, of per 16 B or 8 values.</p>
+<figure>
+  <img src="/images/deepgemm/bank_group_index.png" alt="Bank Group Index Calculation">
+  <figcaption><em>Visualization of bank group index calculation for swizzled shared memory access</em></figcaption>
+</figure>
+<p>So now each of our bank group indices correspond to the linearized index of a (row, col) pair in the atom of shape (WGMMA_M_PER_WARP = 16, kSwizzleMode / kNumBankGroupBytes). More specifically, it is a single column of this atom where we will issue the stmatrix load.</p>
+<p>We now perform the swizzling operation:</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span style="color:#65737e;">// Reshape the atom in another view and swizzle
+</span><span style="color:#65737e;">//  - original: `(BLOCK_M, kSwizzleDMode / kNumBankGroupBytes)`
+</span><span style="color:#65737e;">//  - new: `(BLOCK_M * kSwizzleDMode / kNumBankGroupBytes / 8, 8)`
+</span><span style="color:#b48ead;">constexpr bool</span><span> kHasShortcut = (</span><span style="color:#d08770;">kSwizzleDMode </span><span>/ </span><span style="color:#d08770;">kNumBankGroupBytes</span><span>) == </span><span style="color:#d08770;">8</span><span>;
+</span><span style="color:#b48ead;">auto</span><span> row = </span><span style="color:#d08770;">kHasShortcut </span><span>? (in_atom_offset / </span><span style="color:#d08770;">8 </span><span>+ lane_idx) : (bank_group_index / </span><span style="color:#d08770;">8</span><span>);
+</span><span style="color:#b48ead;">auto</span><span> col = </span><span style="color:#d08770;">kHasShortcut </span><span>? (in_atom_offset) : (bank_group_index % </span><span style="color:#d08770;">8</span><span>);
+</span><span>col ^= row % (</span><span style="color:#d08770;">kSwizzleDMode </span><span>/ </span><span style="color:#d08770;">16</span><span>);
+</span></code></pre>
+<p>We now need to slightly reshape the atom, but we aren't going to reorder any of the data. We want to repack the contiguous data so that a single row is 128 bytes, or 8 x 16 B. This is because TMA instructions read 128B (all 32 banks) of shared memory per cycle. This means that for 16,32,64B swizzling we pack multiple rows into a 128 B line, which is why the linearized bank group index was required.</p>
+<p>We then perform the swizzling operation, which is the straightforward XOR operation, using the row cycle index as the XOR key. The swizzle operation is bijective and ensures minimal bank conflicts - for a more in depth explanation, <a href="https://leimao.github.io/blog/CuTe-Swizzle/">Lei Mao's Blog</a> is great. You'll notice that the swizzling operation is being carried out on units of 16B - this is also important since PTX performs the swizzling operation in units of 128 bits or 16 bytes.</p>
+<p>Finally, we calculate the swizzled shared memory pointer and issue the stmatrix(x2) instruction:</p>
+<pre data-lang="cpp" style="background-color:#2b303b;color:#c0c5ce;" class="language-cpp "><code class="language-cpp" data-lang="cpp"><span>smem_ptr = reinterpret_cast&lt;uint8_t*&gt;(smem_d) +                </span><span style="color:#65737e;">// Base pointer
+</span><span>  warp_idx * (WGMMA_M_PER_WARP * </span><span style="color:#d08770;">kSwizzleDMode</span><span>) +            </span><span style="color:#65737e;">// Warp offset
+</span><span>  </span><span style="color:#bf616a;">m_offset </span><span>* kSwizzleDMode +                                 </span><span style="color:#65737e;">// Wave offset
+</span><span>  atom_offset * BLOCK_M * kSwizzleDMode +                    </span><span style="color:#65737e;">// Swizzle atom offset (constants)
+</span><span>  row * (</span><span style="color:#d08770;">kNumBankGroupBytes </span><span>* </span><span style="color:#d08770;">8</span><span>) + col * </span><span style="color:#d08770;">kNumBankGroupBytes</span><span>; </span><span style="color:#65737e;">// In-atom offset
+</span><span>
+</span><span> </span><span style="color:#65737e;">// NOTES: only 16 lanes&#39; addresses are used
+</span><span>SM90_U32x2_STSM_N&lt;nv_bfloat162&gt;::</span><span style="color:#8fa1b3;">copy</span><span>(
+</span><span>  </span><span style="color:#bf616a;">__float22bfloat162_rn</span><span>({shifted_accum[i * </span><span style="color:#d08770;">4 </span><span>+ </span><span style="color:#d08770;">0</span><span>], shifted_accum[i * </span><span style="color:#d08770;">4 </span><span>+ </span><span style="color:#d08770;">1</span><span>]}),
+</span><span>  </span><span style="color:#bf616a;">__float22bfloat162_rn</span><span>({shifted_accum[i * </span><span style="color:#d08770;">4 </span><span>+ </span><span style="color:#d08770;">2</span><span>], shifted_accum[i * </span><span style="color:#d08770;">4 </span><span>+ </span><span style="color:#d08770;">3</span><span>]}),
+</span><span>  smem_ptr
+</span><span>);
+</span></code></pre>
+<p>Remember that in the new swizzled layout, the matrix is sliced into columns of width kSwizzleDMode bytes and each column represents an atom, so the swizzle atom offset is actually the largest stride.</p>
+<p>The warp offset and wave offset just move the pointer down the rows of the atom, and then we use the calculated row and column indices to find the atom offset inside. Note that we cast smem_d to uint8_t, i.e to byte units, so all the other offsets must also be in bytes.</p>
+<p>We then perform the stmatrix instruction using a small wrapper, remembering to convert the registers from float to bf16.</p>
+<p>The last section of the code carries out the actual TMA store instruction, but this is straightforward and doesn't contain any new content.</p>
+<!-- 
+
+### The Function Signature
+Let's first look at the templated function signature - while not as interesting as other parts of the code, it sets the stage for the actual function and the information we can actually use:
+```cpp
+template <cute::UMMA::Major kMajorSFB,
+          uint32_t SHAPE_M, uint32_t SHAPE_N, uint32_t SHAPE_K,
+          uint32_t kNumGroups,
+          uint32_t BLOCK_M, uint32_t BLOCK_N, uint32_t BLOCK_K,
+          uint32_t kSwizzleAMode, uint32_t kSwizzleBMode, uint32_t kSwizzleDMode,
+          uint32_t kNumStages, uint32_t kNumLastStages,
+          uint32_t kNumTMAThreads, uint32_t kNumMathThreads,
+          uint32_t kNumTMAMulticast, bool kIsTMAMulticastOnA,
+          uint32_t kNumSMs, GemmType kGemmType,
+          typename epilogue_type_t>
+__global__ __launch_bounds__(kNumTMAThreads + kNumMathThreads, 1) void
+sm90_fp8_gemm_1d2d_impl(float* sfb, int* grouped_layout,
+                        uint32_t shape_m, uint32_t shape_n, uint32_t shape_k,
+                        const __grid_constant__ cute::TmaDescriptor tensor_map_a,
+                        const __grid_constant__ cute::TmaDescriptor tensor_map_b,
+                        const __grid_constant__ cute::TmaDescriptor tensor_map_d,
+                        const __grid_constant__ cute::TmaDescriptor tensor_map_sfa)
+```
+The interesting bits:
+- kGemmType: this kernel allows multiple different GEMM functions, like Normal, Batched and GruopedGEMMs
+    - grouped_layout: this gives information about  --></section>
+  <hr />
+  <!-- Post Taxonomies -->
+
+  <!-- Begin Page End inject -->
+  
+  <!-- End Page End inject -->
+</article>
+
+  </main>
+  <!-- Footer -->
+<footer class="mx-auto flex lg:mt-5 max-w-3xl flex-wrap items-center px-4 py-3 text-sm opacity-60">
+  <div class="mr-auto basis-full lg:basis-1/2">
+  © <time datetime="2025">2025</time>
+  </div>
+  <div class="flex basis-full lg:basis-1/2 lg:justify-end">
+    <span class="mr-6 lg:ml-6">
+      <a class="link" href="https://www.getzola.org/" target="_blank">Powered by Zola</a>
+    </span>
+    <a class="link" href="https://www.getzola.org/themes/linkita/" target="_blank">&#9998; Linkita</a>
+  </div>
+  <!-- Begin Footer inject -->
+  
+  <!-- End Footer inject -->
+</footer>
+
+  
+  <link rel="stylesheet" href="https://kingsleykim.dev/katex/katex.min.css?h=e189fd0238811989c364" />
+  <script defer src="https://kingsleykim.dev/katex/katex.min.js?h=6b909443e6c8f6e5d24c"></script>
+  <script defer src="https://kingsleykim.dev/katex/contrib/auto-render.min.js?h=bb53eb953394531aae36"></script>
+  <script>document.addEventListener("DOMContentLoaded", window.zolaTheme.katex.init);</script>
+
+  <!-- Begin Body End inject -->
+  
+  <!-- End Body End inject -->
+</body>
+
+</html>

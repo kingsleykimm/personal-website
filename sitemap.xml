@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<url>
+  <loc>https://kingsleykim.dev/</loc>
+</url>
+<url>
+  <loc>https://kingsleykim.dev/blog/</loc>
+</url>
+<url>
+  <loc>https://kingsleykim.dev/blog/cpp-learning/</loc>
+  <lastmod>2025-12-22</lastmod>
+</url>
+<url>
+  <loc>https://kingsleykim.dev/blog/deepgemm-scheduler/</loc>
+  <lastmod>2025-12-30</lastmod>
+</url>
+<url>
+  <loc>https://kingsleykim.dev/blog/deepgemm/</loc>
+  <lastmod>2025-12-30</lastmod>
+</url>
+<url>
+  <loc>https://kingsleykim.dev/blog/qwen3-next/</loc>
+  <lastmod>2025-12-30</lastmod>
+</url>
+</urlset>
